@@ -1,4 +1,5 @@
 node_modules/
 stream/*.ts
 stream/*.m3u8
+clips/
 dist/

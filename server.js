@@ -8,9 +8,14 @@ const CAMERA = process.env.CAMERA || "0";   // AVFoundation video device index
 const MIC = process.env.MIC || "default";    // AVFoundation audio device index (or "none" to disable)
 const PASSWORD = process.env.PASSWORD || ""; // Set to require basic auth
 const HLS_DIR = path.join(__dirname, "stream");
+const CLIPS_DIR = path.join(__dirname, "clips");
+const MAX_SEGMENTS = 30;  // keep ~60s of segments for clip capture
+const MAX_CLIPS = 50;     // retention limit
+const CLIP_COOLDOWN = 15000; // minimum 15s between clips
 
-// Ensure stream directory exists
+// Ensure directories exist
 if (!fs.existsSync(HLS_DIR)) fs.mkdirSync(HLS_DIR);
+if (!fs.existsSync(CLIPS_DIR)) fs.mkdirSync(CLIPS_DIR);
 
 const app = express();
 
@@ -89,6 +94,72 @@ app.get("/events", (req, res) => {
   req.on("close", () => sseClients.delete(res));
 });
 
+// --- Clip capture ---
+const activeCaptures = new Set();
+let lastClipTime = 0;
+
+function captureClip(eventType, confidence) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const clipId = `${eventType}_${timestamp}`;
+  const clipPath = path.join(CLIPS_DIR, `${clipId}.mp4`);
+  const thumbPath = path.join(CLIPS_DIR, `${clipId}.jpg`);
+  const metaPath = path.join(CLIPS_DIR, `${clipId}.json`);
+
+  const segments = fs.readdirSync(HLS_DIR)
+    .filter(f => f.endsWith(".ts"))
+    .sort();
+  if (segments.length === 0) return Promise.resolve(null);
+
+  const clipSegments = segments.slice(-15); // up to 30s
+  for (const seg of clipSegments) activeCaptures.add(seg);
+
+  const concatFile = path.join(CLIPS_DIR, `${clipId}_concat.txt`);
+  const concatList = clipSegments
+    .map(s => `file '${path.join(HLS_DIR, s)}'`)
+    .join("\n");
+  fs.writeFileSync(concatFile, concatList);
+
+  return new Promise((resolve) => {
+    const ff = spawn("ffmpeg", [
+      "-f", "concat", "-safe", "0",
+      "-i", concatFile,
+      "-c", "copy",
+      "-movflags", "+faststart",
+      clipPath,
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+
+    ff.on("close", (code) => {
+      try { fs.unlinkSync(concatFile); } catch {}
+      for (const seg of clipSegments) activeCaptures.delete(seg);
+
+      if (code !== 0) return resolve(null);
+
+      // Extract thumbnail
+      const thumbFf = spawn("ffmpeg", [
+        "-i", clipPath,
+        "-ss", "1",
+        "-frames:v", "1",
+        "-q:v", "3",
+        thumbPath,
+      ], { stdio: ["ignore", "pipe", "pipe"] });
+
+      thumbFf.on("close", () => {
+        const meta = {
+          id: clipId,
+          type: eventType,
+          confidence,
+          timestamp: new Date().toISOString(),
+          clip: `${clipId}.mp4`,
+          thumbnail: `${clipId}.jpg`,
+          duration: clipSegments.length * 2,
+        };
+        fs.writeFileSync(metaPath, JSON.stringify(meta));
+        resolve(meta);
+      });
+    });
+  });
+}
+
 app.post("/bark", (req, res) => {
   const type = req.body.type === "whine" ? "whine" : "bark";
   const event = {
@@ -98,11 +169,42 @@ app.post("/bark", (req, res) => {
   };
   const label = type === "whine" ? "WHINE" : "BARK";
   console.log(`[${label}] ${event.timestamp} (confidence: ${(event.confidence * 100).toFixed(0)}%)`);
-  for (const client of sseClients) {
-    client.write(`data: ${JSON.stringify(event)}\n\n`);
+
+  const now = Date.now();
+  if (now - lastClipTime > CLIP_COOLDOWN) {
+    lastClipTime = now;
+    captureClip(type, req.body.confidence).then((meta) => {
+      if (meta) {
+        console.log(`[CLIP] Saved ${meta.clip} (${meta.duration}s)`);
+        event.clip = meta;
+      }
+      for (const client of sseClients) {
+        client.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    });
+  } else {
+    for (const client of sseClients) {
+      client.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
   }
   res.json({ ok: true });
 });
+
+// --- Clips API ---
+app.get("/api/clips", (req, res) => {
+  const clips = fs.readdirSync(CLIPS_DIR)
+    .filter(f => f.endsWith(".json"))
+    .sort()
+    .reverse()
+    .map(f => {
+      try { return JSON.parse(fs.readFileSync(path.join(CLIPS_DIR, f), "utf-8")); }
+      catch { return null; }
+    })
+    .filter(Boolean);
+  res.json(clips);
+});
+
+app.use("/clips", express.static(CLIPS_DIR));
 
 // Start ffmpeg capture
 function startFFmpeg() {
@@ -133,7 +235,7 @@ function startFFmpeg() {
     "-f", "hls",
     "-hls_time", "2",     // 2-second segments — smoother over tunnel
     "-hls_list_size", "5",
-    "-hls_flags", "delete_segments+append_list",
+    "-hls_flags", "append_list",  // server handles segment cleanup
     "-hls_segment_filename", path.join(HLS_DIR, "seg%03d.ts"),
     path.join(HLS_DIR, "stream.m3u8"),
   ];
@@ -158,6 +260,38 @@ function startFFmpeg() {
 }
 
 const ffmpegProcess = startFFmpeg();
+
+// Server-side segment cleanup (replaces ffmpeg's delete_segments)
+setInterval(() => {
+  const segments = fs.readdirSync(HLS_DIR)
+    .filter(f => f.endsWith(".ts"))
+    .sort();
+  if (segments.length > MAX_SEGMENTS) {
+    const toDelete = segments
+      .slice(0, segments.length - MAX_SEGMENTS)
+      .filter(seg => !activeCaptures.has(seg));
+    for (const seg of toDelete) {
+      try { fs.unlinkSync(path.join(HLS_DIR, seg)); } catch {}
+    }
+  }
+}, 4000);
+
+// Clips retention cleanup
+setInterval(() => {
+  const metaFiles = fs.readdirSync(CLIPS_DIR)
+    .filter(f => f.endsWith(".json"))
+    .sort();
+  if (metaFiles.length > MAX_CLIPS) {
+    const toRemove = metaFiles.slice(0, metaFiles.length - MAX_CLIPS);
+    for (const metaFile of toRemove) {
+      const base = metaFile.replace(".json", "");
+      for (const ext of [".json", ".mp4", ".jpg"]) {
+        try { fs.unlinkSync(path.join(CLIPS_DIR, base + ext)); } catch {}
+      }
+    }
+    console.log(`[CLEANUP] Removed ${toRemove.length} old clips`);
+  }
+}, 60000);
 
 app.listen(PORT, () => {
   console.log(`\n  OllieCam running at http://localhost:${PORT}`);

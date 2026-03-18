@@ -22,16 +22,25 @@ OllieCam — a live dog cam web app that captures video and audio from a Mac's c
 
 Single-process Node.js app with two responsibilities:
 
-1. **ffmpeg child process** (`server.js:startFFmpeg`) — Captures video and audio from the Mac camera/mic via AVFoundation, encodes video to H.264 (ultrafast/zerolatency) and audio to AAC, and writes 1-second HLS segments to the `stream/` directory. Auto-restarts on crash after 3 seconds.
+1. **ffmpeg child process** (`server.js:startFFmpeg`) — Captures video and audio from the Mac camera/mic via AVFoundation, encodes video to H.264 (ultrafast/zerolatency, 800kbps) and audio to AAC (128kbps mono), and writes 2-second HLS segments to the `stream/` directory. Server-side cleanup keeps the last 30 segments (~60s). Auto-restarts on crash after 3 seconds.
 
-2. **Express HTTP server** (`server.js`) — Serves HLS segments from `stream/` with correct MIME types and CORS headers, serves the static viewer page from `public/`, and provides SSE (`GET /events`) and bark reporting (`POST /bark`) endpoints for real-time bark notifications across all connected viewers.
+2. **Express HTTP server** (`server.js`) — Serves HLS segments, static viewer page, snapshot endpoint (`GET /snapshot`), SSE (`GET /events`), bark/whine reporting (`POST /bark`), event clips API (`GET /api/clips`), and clip files (`/clips/`).
 
-The viewer (`public/index.html`) uses hls.js for non-Safari browsers and native HLS for Safari. It polls for stream availability, then connects with low-latency HLS settings. Audio is routed through the Web Audio API (`createMediaElementSource` -> `AnalyserNode` -> `GainNode`) to enable both volume control and bark detection.
+The viewer (`public/index.html`) uses hls.js for non-Safari browsers and native HLS for Safari. Starts paused with a snapshot preview; clicking play begins live streaming. Clicking the video pauses and shows a fresh snapshot. Audio is routed through the Web Audio API (`createMediaElementSource` -> `AnalyserNode` -> `GainNode`) for volume control and sound detection.
 
-**Bark detection** runs client-side using the Web Audio API `AnalyserNode`. It monitors energy in the 500–3000Hz frequency band against a rolling baseline, triggering on spikes >15dB above baseline. Detection activates when the user first clicks unmute (browser requires a user gesture to start `AudioContext`). Detected barks are POSTed to the server and broadcast via SSE so all viewers (including muted ones) see alerts. Key tuning constants are in the `startBarkDetection()` function in `index.html`.
+See `docs/` for detailed feature documentation.
+
+## Documentation Rules
+
+- Always update CLAUDE.md when adding or changing features, architecture, endpoints, or environment variables.
+- When implementing a new feature, create a corresponding `docs/<feature-name>.md` file explaining how the feature works, its server/client components, configuration, and any tuning parameters.
+- Keep `FEATURES.md` up to date — mark features as completed when implemented and add new ideas as they come up.
+- Keep `README.md` in sync with any user-facing changes (new commands, env vars, features).
 
 ## Key Files
 
-- `server.js` — All server logic (ffmpeg management, Express routes, auth middleware, SSE + bark event endpoints)
-- `public/index.html` — Single-page viewer with embedded CSS and JS (HLS playback, Web Audio bark detection, bark alert UI + log)
+- `server.js` — All server logic (ffmpeg management, Express routes, auth, SSE, clip capture, segment cleanup)
+- `public/index.html` — Single-page viewer with embedded CSS and JS (HLS playback, play/pause, sound detection, bark alert UI, event clips timeline)
 - `stream/` — Runtime directory for HLS segments (`.ts`) and playlist (`.m3u8`); contents are ephemeral
+- `clips/` — Saved event clips (`.mp4`), thumbnails (`.jpg`), and metadata (`.json`); auto-cleaned to 50 most recent
+- `docs/` — Feature documentation

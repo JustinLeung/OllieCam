@@ -7,6 +7,9 @@ export default defineConfig({
     proxy: {
       "/stream": "http://localhost:3000",
       "/bark": "http://localhost:3000",
+      "/snapshot": "http://localhost:3000",
+      "/api/clips": "http://localhost:3000",
+      "/clips": "http://localhost:3000",
       "/events": {
         target: "http://localhost:3000",
         // SSE requires no response buffering

@@ -162,6 +162,82 @@
       margin-top: 12px;
       display: none;
     }
+    .timeline {
+      width: 100%;
+      max-width: 900px;
+      margin-top: 24px;
+    }
+    .timeline h3 {
+      font-size: 0.9rem;
+      color: #888;
+      margin-bottom: 12px;
+    }
+    .timeline-scroll {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .timeline-scroll::-webkit-scrollbar { height: 6px; }
+    .timeline-scroll::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    .clip-card {
+      flex: 0 0 200px;
+      background: #2a2a3e;
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .clip-card:hover { transform: scale(1.03); }
+    .clip-card img {
+      width: 100%;
+      height: 112px;
+      object-fit: cover;
+      display: block;
+    }
+    .clip-info { padding: 8px 10px; }
+    .clip-type {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .clip-type.bark { color: #ef4444; }
+    .clip-type.whine { color: #eab308; }
+    .clip-time {
+      font-size: 0.7rem;
+      color: #888;
+      margin-top: 2px;
+    }
+    .clip-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0,0,0,0.85);
+      align-items: center;
+      justify-content: center;
+    }
+    .clip-modal.active { display: flex; }
+    .clip-modal video {
+      max-width: 90vw;
+      max-height: 80vh;
+      border-radius: 8px;
+    }
+    .clip-modal-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 2rem;
+      cursor: pointer;
+    }
+    .timeline-empty {
+      color: #666;
+      font-size: 0.8rem;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -184,6 +260,18 @@
   <div class="bark-log" id="bark-log">
     <h3>Recent Activity</h3>
     <ul id="bark-list"></ul>
+  </div>
+
+  <div class="timeline">
+    <h3>Event Clips</h3>
+    <div class="timeline-scroll" id="timeline-scroll">
+      <p class="timeline-empty" id="timeline-empty">No clips yet. Clips are saved when barks or whines are detected.</p>
+    </div>
+  </div>
+
+  <div class="clip-modal" id="clip-modal">
+    <button class="clip-modal-close" id="clip-modal-close">&times;</button>
+    <video id="clip-video" controls></video>
   </div>
 
   <script>
@@ -385,7 +473,10 @@
     const evtSource = new EventSource('/events');
     evtSource.onmessage = (e) => {
       const data = JSON.parse(e.data);
-      if (data.type === 'bark' || data.type === 'whine') showAlert(data.type);
+      if (data.type === 'bark' || data.type === 'whine') {
+        showAlert(data.type);
+        if (data.clip) addClipCard(data.clip);
+      }
     };
 
     // --- Stream connection ---
@@ -452,6 +543,60 @@
         })
         .catch(() => setTimeout(waitForStream, 2000));
     }
+
+    // --- Event Clips Timeline ---
+    const timelineScroll = document.getElementById('timeline-scroll');
+    const timelineEmpty = document.getElementById('timeline-empty');
+    const clipModal = document.getElementById('clip-modal');
+    const clipVideo = document.getElementById('clip-video');
+    const clipModalClose = document.getElementById('clip-modal-close');
+
+    function renderClipCard(clip) {
+      const card = document.createElement('div');
+      card.className = 'clip-card';
+      card.innerHTML = `
+        <img src="/clips/${clip.thumbnail}" alt="${clip.type} clip" loading="lazy">
+        <div class="clip-info">
+          <div class="clip-type ${clip.type}">${clip.type}</div>
+          <div class="clip-time">${new Date(clip.timestamp).toLocaleString()}</div>
+        </div>
+      `;
+      card.addEventListener('click', () => {
+        clipVideo.src = `/clips/${clip.clip}`;
+        clipModal.classList.add('active');
+        clipVideo.play();
+      });
+      return card;
+    }
+
+    function addClipCard(clip) {
+      timelineEmpty.style.display = 'none';
+      timelineScroll.prepend(renderClipCard(clip));
+      while (timelineScroll.children.length > 50) {
+        timelineScroll.removeChild(timelineScroll.lastChild);
+      }
+    }
+
+    clipModalClose.addEventListener('click', () => {
+      clipModal.classList.remove('active');
+      clipVideo.pause();
+      clipVideo.src = '';
+    });
+    clipModal.addEventListener('click', (e) => {
+      if (e.target === clipModal) clipModalClose.click();
+    });
+
+    // Load existing clips on page load
+    fetch('/api/clips')
+      .then(res => res.json())
+      .then(clips => {
+        if (clips.length === 0) return;
+        timelineEmpty.style.display = 'none';
+        for (const clip of clips) {
+          timelineScroll.appendChild(renderClipCard(clip));
+        }
+      })
+      .catch(() => {});
   </script>
 </body>
 </html>
