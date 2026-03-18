@@ -22,8 +22,12 @@ const SERVER_URL = (process.env.SERVER_URL || "http://localhost:3000").replace(/
 const PASSWORD = process.env.PASSWORD || "";
 
 // ============================================================
-// Audio analysis constants (match web client exactly)
+// Audio analysis constants
+// All tunable via environment variables for real-world calibration.
+// Run with DEBUG=1 to see live energy/onset/contrast values.
 // ============================================================
+
+const env = (key, fallback) => Number(process.env[key] || fallback);
 
 const SAMPLE_RATE = 44100;
 const FFT_SIZE = 2048;
@@ -33,19 +37,19 @@ const SAMPLES_PER_ANALYSIS = Math.floor(SAMPLE_RATE * ANALYSIS_INTERVAL_MS / 100
 // Bark: 500-3000 Hz, loud short bursts
 const BARK_LOW_HZ = 500;
 const BARK_HIGH_HZ = 3000;
-const BARK_SPIKE_THRESHOLD = 15;     // dB above baseline
-const BARK_ABSOLUTE_THRESHOLD = -45; // dB
-const BARK_COOLDOWN_MS = 3000;
+const BARK_SPIKE_THRESHOLD = env("BARK_SPIKE", 25);       // dB above baseline
+const BARK_ABSOLUTE_THRESHOLD = env("BARK_ABS", -30);     // dB minimum energy
+const BARK_COOLDOWN_MS = env("BARK_COOLDOWN", 3000);      // ms between detections
 
 // Whine: 300-5000 Hz, sustained tonal
 const WHINE_LOW_HZ = 300;
 const WHINE_HIGH_HZ = 5000;
-const WHINE_SPIKE_THRESHOLD = 8;     // dB above baseline
-const WHINE_ABSOLUTE_THRESHOLD = -50; // dB
-const WHINE_SUSTAINED_FRAMES = 15;   // ~1.5s at 100ms intervals
-const WHINE_COOLDOWN_MS = 5000;
+const WHINE_SPIKE_THRESHOLD = env("WHINE_SPIKE", 12);     // dB above baseline
+const WHINE_ABSOLUTE_THRESHOLD = env("WHINE_ABS", -45);   // dB minimum energy
+const WHINE_SUSTAINED_FRAMES = env("WHINE_FRAMES", 15);   // ~1.5s at 100ms
+const WHINE_COOLDOWN_MS = env("WHINE_COOLDOWN", 5000);    // ms between detections
 
-const BASELINE_WINDOW = 50; // ~5s of history
+const BASELINE_WINDOW = env("BASELINE_WINDOW", 50);       // ~5s of history
 
 // Frequency bin resolution
 const BIN_HZ = SAMPLE_RATE / FFT_SIZE;
@@ -102,17 +106,11 @@ function fft(re, im) {
   }
 }
 
-// Noise isolation: spectral contrast thresholds
-// A bark has energy concentrated in the bark band; music spreads energy everywhere.
-// Spectral contrast = bark band energy - energy outside bark band.
-// High contrast → bark. Low contrast → music/noise.
-const BARK_SPECTRAL_CONTRAST_MIN = 6;   // dB: bark band must exceed non-bark by this much
-const WHINE_SPECTRAL_CONTRAST_MIN = 4;  // dB: whine band must exceed non-whine by this much
-
-// Onset sharpness: barks rise fast, music changes gradually.
-// Track frame-to-frame energy delta; require sharp rise for bark.
-const BARK_ONSET_THRESHOLD = 10;  // dB rise from previous frame in bark band
-const ONSET_HISTORY = 3;          // frames to look back for onset
+// Noise isolation thresholds (also tunable via env)
+const BARK_SPECTRAL_CONTRAST_MIN = env("BARK_CONTRAST", 5);  // dB: bark band must exceed non-bark
+const WHINE_SPECTRAL_CONTRAST_MIN = env("WHINE_CONTRAST", 5);
+const BARK_ONSET_THRESHOLD = env("BARK_ONSET", 15);          // dB rise from recent frame
+const ONSET_HISTORY = 5;                                       // frames to look back (~500ms)
 
 // ============================================================
 // Detection state
@@ -207,6 +205,11 @@ function analyzeFrame() {
   // Skip detection until baseline has filled (~5s warmup)
   if (frameCount < BASELINE_WINDOW) return;
 
+  // Debug: log levels every 10 frames (~1s) when DEBUG=1
+  if (process.env.DEBUG === "1" && frameCount % 10 === 0) {
+    console.log(`[DBG] barkE=${barkE.toFixed(1)} contrast=${barkContrast.toFixed(1)} onset=${barkOnset.toFixed(1)} spike=${barkSpike.toFixed(1)} baseline=${baseline.toFixed(1)}`);
+  }
+
   // Bark detection: spike + absolute + spectral contrast + sharp onset + cooldown
   if (barkSpike > BARK_SPIKE_THRESHOLD &&
       barkE > BARK_ABSOLUTE_THRESHOLD &&
@@ -214,6 +217,9 @@ function analyzeFrame() {
       barkOnset > BARK_ONSET_THRESHOLD &&
       now - lastBarkDetect > BARK_COOLDOWN_MS) {
     const confidence = Math.min(barkSpike / 30, 1.0);
+    if (process.env.DEBUG === "1") {
+      console.log(`[TRIGGER] barkE=${barkE.toFixed(1)} contrast=${barkContrast.toFixed(1)} onset=${barkOnset.toFixed(1)} spike=${barkSpike.toFixed(1)}`);
+    }
     lastBarkDetect = now;
     reportDetection("bark", confidence);
   }
@@ -300,6 +306,9 @@ function startCapture() {
   console.log(`\n  OllieCam Detector`);
   console.log(`  Mic: ${MIC}`);
   console.log(`  Server: ${SERVER_URL}`);
+  console.log(`  Bark: spike>${BARK_SPIKE_THRESHOLD}dB abs>${BARK_ABSOLUTE_THRESHOLD}dB onset>${BARK_ONSET_THRESHOLD}dB contrast>${BARK_SPECTRAL_CONTRAST_MIN}dB cooldown=${BARK_COOLDOWN_MS}ms`);
+  console.log(`  Whine: spike>${WHINE_SPIKE_THRESHOLD}dB abs>${WHINE_ABSOLUTE_THRESHOLD}dB contrast>${WHINE_SPECTRAL_CONTRAST_MIN}dB sustained=${WHINE_SUSTAINED_FRAMES}frames cooldown=${WHINE_COOLDOWN_MS}ms`);
+  if (process.env.DEBUG === "1") console.log("  Debug logging enabled");
   console.log(`  Listening for barks and whines...\n`);
 
   const ffmpeg = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });

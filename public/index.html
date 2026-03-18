@@ -920,8 +920,8 @@
     function startStream() {
       if (Hls.isSupported()) {
         hlsInstance = new Hls({
-          liveSyncDurationCount: 4,
-          liveMaxLatencyDurationCount: 8,
+          liveSyncDurationCount: 2,
+          liveMaxLatencyDurationCount: 4,
           lowLatencyMode: false,
           backBufferLength: 30,
         });
