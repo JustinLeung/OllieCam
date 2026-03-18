@@ -7,8 +7,8 @@ struct ClipCardView: View {
     @State private var thumbnailURL: URL?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ZStack(alignment: .topLeading) {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .bottomLeading) {
                 if let thumbnailURL {
                     AsyncImage(url: thumbnailURL) { image in
                         image
@@ -16,34 +16,46 @@ struct ClipCardView: View {
                             .aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Rectangle()
-                            .fill(Color.gray.opacity(0.3))
+                            .fill(Color(.tertiarySystemFill))
                             .overlay {
                                 ProgressView()
-                                    .tint(.white)
-                                    .scaleEffect(0.6)
+                                    .scaleEffect(0.7)
                             }
                     }
                 } else {
                     Rectangle()
-                        .fill(Color.gray.opacity(0.3))
+                        .fill(Color(.tertiarySystemFill))
+                        .overlay {
+                            Image(systemName: "film")
+                                .foregroundStyle(.secondary)
+                        }
                 }
 
-                Text(clip.type.rawValue.uppercased())
-                    .font(.system(size: 9))
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(clip.type.color)
-                    .clipShape(.rect(cornerRadius: 3))
-                    .padding(4)
+                HStack(spacing: 4) {
+                    Image(systemName: clip.type.icon)
+                        .font(.system(size: 9))
+                    Text(clip.type.rawValue.uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(clip.type.color.opacity(0.9))
+                .clipShape(Capsule())
+                .padding(6)
             }
-            .frame(width: 120, height: 68)
-            .clipShape(.rect(cornerRadius: 8))
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: 12))
 
-            Text(clip.timestamp, style: .time)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.6))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(clip.timestamp, style: .relative)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("\(Int(clip.confidence * 100))% confidence")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .task {
             thumbnailURL = await viewModel.thumbnailURL(for: clip)

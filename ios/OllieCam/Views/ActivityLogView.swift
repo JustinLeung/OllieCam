@@ -4,32 +4,27 @@ struct ActivityLogView: View {
     let events: [BarkEvent]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Activity")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recent Activity")
                 .font(.headline)
-                .foregroundStyle(.white)
                 .padding(.horizontal)
 
             if events.isEmpty {
-                Text("No activity yet")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
+                ContentUnavailableView(
+                    "No Activity",
+                    systemImage: "waveform",
+                    description: Text("Events will appear here when sounds are detected.")
+                )
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 4) {
-                        ForEach(events) { event in
-                            ActivityLogRow(event: event)
-                        }
+                LazyVStack(spacing: 8) {
+                    ForEach(events.prefix(10)) { event in
+                        ActivityLogRow(event: event)
                     }
-                    .padding(.horizontal)
                 }
-                .frame(maxHeight: 150)
-                .scrollIndicators(.hidden)
+                .padding(.horizontal)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
     }
 }
 
@@ -37,25 +32,34 @@ private struct ActivityLogRow: View {
     let event: BarkEvent
 
     var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(event.type.color)
-                .frame(width: 8, height: 8)
+        HStack(spacing: 12) {
+            Image(systemName: event.type.icon)
+                .font(.callout)
+                .foregroundStyle(event.type.color)
+                .frame(width: 32, height: 32)
+                .background(event.type.color.opacity(0.12))
+                .clipShape(.circle)
 
-            Text(event.type.rawValue.capitalized)
-                .font(.subheadline)
-                .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.type.rawValue.capitalized)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
 
-            Text("\(Int(event.confidence * 100))%")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.6))
+                Text(event.timestamp, style: .relative)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Spacer()
 
-            Text(event.timestamp, style: .time)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
+            Text("\(Int(event.confidence * 100))%")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(.rect(cornerRadius: 12))
     }
 }

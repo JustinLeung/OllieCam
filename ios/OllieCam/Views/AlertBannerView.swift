@@ -11,17 +11,16 @@ struct AlertBannerView: View {
             HStack(spacing: 12) {
                 Image(systemName: event.type.icon)
                     .font(.title2)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(event.type.color)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.type.label)
                         .font(.subheadline)
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
 
                     Text("Confidence: \(Int(event.confidence * 100))%")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -32,13 +31,15 @@ struct AlertBannerView: View {
                     }
                     onDismiss()
                 } label: {
-                    Image(systemName: "xmark")
-                        .foregroundStyle(.white.opacity(0.7))
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.title3)
                 }
             }
             .padding()
-            .background(event.type.color.opacity(0.9))
-            .clipShape(.rect(cornerRadius: 12))
+            .background(.regularMaterial)
+            .clipShape(.rect(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
             .padding(.horizontal)
             .padding(.top, 8)
             .transition(.move(edge: .top).combined(with: .opacity))

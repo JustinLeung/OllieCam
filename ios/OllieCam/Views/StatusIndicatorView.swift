@@ -31,9 +31,13 @@ struct StatusIndicatorView: View {
 
             Text(status.label)
                 .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(status.color)
+                .fontWeight(.semibold)
+                .foregroundStyle(status == .paused ? .secondary : status.color)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
         .onAppear { isPulsing = true }
     }
 }
