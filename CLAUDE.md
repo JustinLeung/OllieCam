@@ -30,7 +30,7 @@ Two independent Node.js processes:
 
 2. **Detector** (`detector.js`) — Standalone process that captures audio from the Mac mic via a separate ffmpeg instance, performs real-time FFT-based bark/whine detection, and reports events to the server via `POST /bark`. Can run on the same machine or remotely. Uses the same detection algorithm and thresholds as the original web client (500-3000 Hz bark band, 300-5000 Hz whine band, rolling baseline, sustained-frame whine detection).
 
-The viewer (`public/index.html`) uses hls.js for non-Safari browsers and native HLS for Safari. Loads the master playlist (`/stream/master.m3u8`) for adaptive quality switching; hls.js auto-selects quality based on bandwidth, with an optional manual quality selector UI. Starts paused with a snapshot preview; clicking play begins live streaming. Clicking the video pauses and shows a fresh snapshot. Audio is routed through the Web Audio API (`createMediaElementSource` -> `AnalyserNode` -> `GainNode`) for volume control and sound detection.
+The viewer (`public/index.html`) uses hls.js for non-Safari browsers and native HLS for Safari. Layout: sticky top bar (app name, LIVE status badge, viewer count), 16:9 video container, dedicated control bar (Play/Pause, Mute, Screenshot download, Quality selector), activity feed with colored event icons and relative timestamps (collapsible to 3 items), and event clips horizontal timeline. Uses CSS custom properties for theming and responsive breakpoints at 480px/360px. Loads the master playlist (`/stream/master.m3u8`) for adaptive quality switching; hls.js auto-selects quality based on bandwidth, with an optional manual quality selector. Starts paused with a snapshot preview; clicking play begins live streaming. Clicking the video or the control bar pause button pauses and shows a fresh snapshot. Audio is routed through the Web Audio API (`createMediaElementSource` -> `AnalyserNode` -> `GainNode`) for volume control and sound detection. SSE events include bark/whine alerts and viewer count broadcasts (`{ type: "viewers", count }`).
 
 See `docs/` for detailed feature documentation.
 
@@ -45,7 +45,7 @@ See `docs/` for detailed feature documentation.
 
 - `server.js` — Streaming server (ffmpeg management, Express routes, auth, SSE, clip capture, segment cleanup)
 - `detector.js` — Standalone bark/whine detector (ffmpeg audio capture, FFT analysis, reports to server)
-- `public/index.html` — Single-page viewer with embedded CSS and JS (HLS playback, play/pause, sound detection, bark alert UI, event clips timeline)
+- `public/index.html` — Single-page viewer with embedded CSS and JS (top bar, video player, control bar, activity feed, event clips timeline, screenshot download)
 - `stream/` — Runtime directory for HLS master playlist and variant subdirectories (`720p/`, `480p/`, `360p/`) containing segments (`.ts`) and playlists (`.m3u8`); contents are ephemeral
 - `clips/` — Saved event clips (`.mp4`), thumbnails (`.jpg`), and metadata (`.json`); auto-cleaned to 50 most recent
 - `docs/` — Feature documentation

@@ -120,13 +120,28 @@ app.get("/snapshot", (req, res) => {
 app.use(express.json());
 const sseClients = new Set();
 
+function broadcastViewerCount() {
+  const data = JSON.stringify({ type: "viewers", count: sseClients.size });
+  for (const client of sseClients) {
+    try {
+      client.write(`data: ${data}\n\n`);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+}
+
 app.get("/events", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
   sseClients.add(res);
-  req.on("close", () => sseClients.delete(res));
+  broadcastViewerCount();
+  req.on("close", () => {
+    sseClients.delete(res);
+    broadcastViewerCount();
+  });
 });
 
 // --- Clip capture ---

@@ -2,11 +2,11 @@
 
 ## Quick Wins
 
-### Screenshot Button
-Capture the current frame as a downloadable JPEG. The `/snapshot` endpoint already exists — just add a camera icon button to the UI that triggers a download.
+### ~~Screenshot Button~~ ✅
+Implemented. Camera icon in control bar downloads current frame as JPEG via `/snapshot` endpoint.
 
-### Viewer Count
-Show how many people are currently watching. The server already tracks SSE clients in `sseClients` — expose the count in the status bar.
+### ~~Viewer Count~~ ✅
+Implemented. Server broadcasts viewer count via SSE on connect/disconnect. Displayed in top bar with eye icon.
 
 ### Pre-Recorded Sound Playback
 Buttons to play pre-recorded audio clips ("Good boy!", "No!", treat-call sounds) through the Mac speakers via `afplay`. Upload clips to the server, add a `POST /play-sound` endpoint.
