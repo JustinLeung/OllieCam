@@ -4,6 +4,8 @@ struct SettingsView: View {
     @Environment(SettingsViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
 
+    @Environment(\.openURL) private var openURL
+
     let isInitialSetup: Bool
 
     var body: some View {
@@ -62,6 +64,19 @@ struct SettingsView: View {
                     LabeledContent("Topic", value: viewModel.ntfyTopic)
                         .font(.caption)
 
+                    if let subscribeURL = viewModel.ntfySubscribeURL {
+                        Button {
+                            openURL(subscribeURL)
+                        } label: {
+                            HStack {
+                                Text("Subscribe in ntfy App")
+                                Spacer()
+                                Image(systemName: "arrow.up.forward.app")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
                     Button {
                         Task { await viewModel.sendTestNotification() }
                     } label: {
@@ -74,13 +89,19 @@ struct SettingsView: View {
                     .disabled(viewModel.notificationTestStatus == .sending)
                 }
 
-                Button("Detect from Server") {
-                    Task { await viewModel.fetchNotificationConfig() }
+                if !viewModel.notificationsEnabled {
+                    Button("Detect from Server") {
+                        Task { await viewModel.fetchNotificationConfig() }
+                    }
                 }
             } header: {
                 Text("Notifications")
             } footer: {
-                Text("Set NTFY_TOPIC on the server to enable. Install the ntfy app to receive push notifications when barking or whining is detected.")
+                if viewModel.notificationsEnabled {
+                    Text("Install the [ntfy app](https://apps.apple.com/app/ntfy/id1625396347) and tap Subscribe to receive push notifications when barking or whining is detected.")
+                } else {
+                    Text("Could not detect notification config from server. Tap Detect from Server after connecting.")
+                }
             }
 
             if viewModel.connectionStatus == .connected && isInitialSetup {

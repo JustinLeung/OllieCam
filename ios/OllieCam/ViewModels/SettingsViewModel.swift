@@ -106,4 +106,14 @@ final class SettingsViewModel {
             notificationTestStatus = .failed(error.localizedDescription)
         }
     }
+
+    var ntfySubscribeURL: URL? {
+        guard !ntfyTopic.isEmpty else { return nil }
+        // ntfy app registers for https://ntfy.sh/<topic> URLs
+        return URL(string: "\(ntfyServer)/\(ntfyTopic)")
+    }
+
+    var ntfyAppStoreURL: URL? {
+        URL(string: "https://apps.apple.com/app/ntfy/id1625396347")
+    }
 }
