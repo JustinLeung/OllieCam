@@ -9,7 +9,7 @@ const MIC = process.env.MIC || "default";    // AVFoundation audio device index 
 const PASSWORD = process.env.PASSWORD || ""; // Set to require basic auth
 const HLS_DIR = path.join(__dirname, "stream");
 const CLIPS_DIR = path.join(__dirname, "clips");
-const MAX_SEGMENTS = 30;  // keep ~60s of segments for clip capture
+const MAX_SEGMENTS = 60;  // keep ~60s of segments for clip capture (1s segments)
 const MAX_CLIPS = 50;     // retention limit
 const CLIP_COOLDOWN = 15000; // minimum 15s between clips
 
@@ -160,7 +160,7 @@ function captureClip(eventType, confidence) {
     .sort();
   if (segments.length === 0) return Promise.resolve(null);
 
-  const clipSegments = segments.slice(-15); // up to 30s
+  const clipSegments = segments.slice(-30); // up to 30s (1s segments)
   for (const seg of clipSegments) activeCaptures.add(seg);
 
   const concatFile = path.join(CLIPS_DIR, `${clipId}_concat.txt`);
@@ -201,7 +201,7 @@ function captureClip(eventType, confidence) {
           timestamp: new Date().toISOString(),
           clip: `${clipId}.mp4`,
           thumbnail: `${clipId}.jpg`,
-          duration: clipSegments.length * 2,
+          duration: clipSegments.length,
         };
         fs.writeFileSync(metaPath, JSON.stringify(meta));
         resolve(meta);
@@ -319,7 +319,7 @@ function startFFmpeg() {
         "-b:v", `${v.vbr}k`,
         "-maxrate", `${v.vbr}k`,
         "-bufsize", `${v.vbr * 2}k`,
-        "-g", "30",
+        "-g", "15",
         "-sc_threshold", "0",
       );
 
@@ -331,8 +331,8 @@ function startFFmpeg() {
 
       args.push(
         "-f", "hls",
-        "-hls_time", "2",
-        "-hls_list_size", "5",
+        "-hls_time", "1",
+        "-hls_list_size", "10",
         "-hls_flags", "append_list",
         "-hls_segment_filename", path.join(varDir, "seg%03d.ts"),
         path.join(varDir, "stream.m3u8"),
@@ -350,12 +350,12 @@ function startFFmpeg() {
       "-b:v", "800k",
       "-maxrate", "800k",
       "-bufsize", "1600k",
-      "-g", "30",
+      "-g", "15",
       "-sc_threshold", "0",
       ...(hasAudio ? ["-c:a", "aac", "-b:a", "128k", "-ac", "1"] : ["-an"]),
       "-f", "hls",
-      "-hls_time", "2",
-      "-hls_list_size", "5",
+      "-hls_time", "1",
+      "-hls_list_size", "10",
       "-hls_flags", "append_list",
       "-hls_segment_filename", path.join(HLS_DIR, "seg%03d.ts"),
       path.join(HLS_DIR, "stream.m3u8"),
