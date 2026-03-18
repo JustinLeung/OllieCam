@@ -38,8 +38,10 @@ See `docs/` for detailed feature documentation.
 
 - Always update CLAUDE.md when adding or changing features, architecture, endpoints, or environment variables.
 - When implementing a new feature, create a corresponding `docs/<feature-name>.md` file explaining how the feature works, its server/client components, configuration, and any tuning parameters.
+- When changing tunable parameters (segment duration, thresholds, buffer sizes, etc.), update all docs that reference those values — check `docs/streaming.md`, `docs/adaptive-bitrate.md`, `docs/event-clips.md`, and `docs/detector.md`.
 - Keep `FEATURES.md` up to date — mark features as completed when implemented and add new ideas as they come up.
 - Keep `README.md` in sync with any user-facing changes (new commands, env vars, features).
+- Keep iOS documentation accurate — `docs/ios-client.md` and the iOS section of this file must reflect what the Swift code actually implements. Do not document planned-but-unimplemented iOS features as if they exist.
 
 ## Key Files
 
