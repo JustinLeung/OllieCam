@@ -4,11 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-OllieCam — a live dog cam web app that captures video and audio from a Mac's camera/mic using ffmpeg, encodes it as HLS (HTTP Live Streaming), and serves it via an Express web server. Includes client-side bark/whine detection. Viewers watch the live stream in a browser using hls.js.
+OllieCam — a live dog cam web app that captures video and audio from a Mac's camera/mic using ffmpeg, encodes it as HLS (HTTP Live Streaming), and serves it via an Express web server. Includes server-side bark/whine detection via a standalone detector process. Viewers watch the live stream in a browser using hls.js or the native iOS app.
 
 ## Commands
 
 - **Start the server:** `npm start` (runs `node server.js`)
+- **Start the detector:** `npm run detect` (runs `node detector.js`)
+- **Start both:** `npm run start:all`
 - **Prerequisite:** ffmpeg must be installed (`brew install ffmpeg`)
 
 ## Environment Variables
@@ -17,16 +19,18 @@ OllieCam — a live dog cam web app that captures video and audio from a Mac's c
 - `CAMERA` — AVFoundation video device index (default: "0")
 - `MIC` — AVFoundation audio device index (default: "default"; set to "none" to disable audio)
 - `PASSWORD` — If set, enables HTTP Basic Auth on all routes
+- `ABR` — Adaptive bitrate streaming (default: "true"; set to "false" for single 720p stream)
+- `SERVER_URL` — (detector.js only) OllieCam server URL (default: "http://localhost:3000")
 
 ## Architecture
 
-Single-process Node.js app with two responsibilities:
+Two independent Node.js processes:
 
-1. **ffmpeg child process** (`server.js:startFFmpeg`) — Captures video and audio from the Mac camera/mic via AVFoundation, encodes video to H.264 (ultrafast/zerolatency, 800kbps) and audio to AAC (128kbps mono), and writes 2-second HLS segments to the `stream/` directory. Server-side cleanup keeps the last 30 segments (~60s). Auto-restarts on crash after 3 seconds.
+1. **Streaming server** (`server.js`) — Express HTTP server + ffmpeg child process for video/audio capture. ffmpeg encodes HLS with ABR variants (720p/480p/360p). Serves HLS segments, static viewer page, snapshot (`GET /snapshot`), SSE (`GET /events`), bark reporting (`POST /bark`), clips API (`GET /api/clips`), and clip files (`/clips/`). Captures event clips on `POST /bark` and broadcasts via SSE.
 
-2. **Express HTTP server** (`server.js`) — Serves HLS segments, static viewer page, snapshot endpoint (`GET /snapshot`), SSE (`GET /events`), bark/whine reporting (`POST /bark`), event clips API (`GET /api/clips`), and clip files (`/clips/`).
+2. **Detector** (`detector.js`) — Standalone process that captures audio from the Mac mic via a separate ffmpeg instance, performs real-time FFT-based bark/whine detection, and reports events to the server via `POST /bark`. Can run on the same machine or remotely. Uses the same detection algorithm and thresholds as the original web client (500-3000 Hz bark band, 300-5000 Hz whine band, rolling baseline, sustained-frame whine detection).
 
-The viewer (`public/index.html`) uses hls.js for non-Safari browsers and native HLS for Safari. Starts paused with a snapshot preview; clicking play begins live streaming. Clicking the video pauses and shows a fresh snapshot. Audio is routed through the Web Audio API (`createMediaElementSource` -> `AnalyserNode` -> `GainNode`) for volume control and sound detection.
+The viewer (`public/index.html`) uses hls.js for non-Safari browsers and native HLS for Safari. Loads the master playlist (`/stream/master.m3u8`) for adaptive quality switching; hls.js auto-selects quality based on bandwidth, with an optional manual quality selector UI. Starts paused with a snapshot preview; clicking play begins live streaming. Clicking the video pauses and shows a fresh snapshot. Audio is routed through the Web Audio API (`createMediaElementSource` -> `AnalyserNode` -> `GainNode`) for volume control and sound detection.
 
 See `docs/` for detailed feature documentation.
 
@@ -39,8 +43,29 @@ See `docs/` for detailed feature documentation.
 
 ## Key Files
 
-- `server.js` — All server logic (ffmpeg management, Express routes, auth, SSE, clip capture, segment cleanup)
+- `server.js` — Streaming server (ffmpeg management, Express routes, auth, SSE, clip capture, segment cleanup)
+- `detector.js` — Standalone bark/whine detector (ffmpeg audio capture, FFT analysis, reports to server)
 - `public/index.html` — Single-page viewer with embedded CSS and JS (HLS playback, play/pause, sound detection, bark alert UI, event clips timeline)
-- `stream/` — Runtime directory for HLS segments (`.ts`) and playlist (`.m3u8`); contents are ephemeral
+- `stream/` — Runtime directory for HLS master playlist and variant subdirectories (`720p/`, `480p/`, `360p/`) containing segments (`.ts`) and playlists (`.m3u8`); contents are ephemeral
 - `clips/` — Saved event clips (`.mp4`), thumbnails (`.jpg`), and metadata (`.json`); auto-cleaned to 50 most recent
 - `docs/` — Feature documentation
+- `ios/` — Native iOS client (Swift 6.2 + SwiftUI, iOS 26+)
+
+## iOS Client
+
+Native iOS app in `ios/`. Uses XcodeGen (`project.yml`) — run `xcodegen generate` from `ios/` to create the Xcode project (`.xcodeproj` is gitignored).
+
+### iOS Architecture
+- **Swift 6.2 + SwiftUI**, targeting iOS 26+
+- `@Observable` + `@MainActor` ViewModels, strict concurrency
+- AVPlayer + AVPlayerLayer (UIViewRepresentable) for HLS
+- MTAudioProcessingTap + vDSP FFT for client-side bark/whine detection (same thresholds as web)
+- SSE via URLSession.bytes for real-time alerts
+- No third-party dependencies
+
+### iOS Key Files
+- `ios/project.yml` — XcodeGen spec
+- `ios/OllieCam/OllieCamApp.swift` — App entry point
+- `ios/OllieCam/Services/` — APIClient, SSEClient, HLSPlayerService, AudioAnalysisService, FFTProcessor
+- `ios/OllieCam/ViewModels/` — LiveStreamViewModel, ClipsViewModel, SettingsViewModel
+- `ios/OllieCam/Views/` — All SwiftUI views

@@ -13,9 +13,44 @@ const MAX_SEGMENTS = 30;  // keep ~60s of segments for clip capture
 const MAX_CLIPS = 50;     // retention limit
 const CLIP_COOLDOWN = 15000; // minimum 15s between clips
 
+// Adaptive bitrate streaming (set ABR=false to use single 720p stream)
+const ABR = (process.env.ABR || "true").toLowerCase() !== "false";
+const VARIANTS = [
+  { name: "720p", width: 1280, height: 720, vbr: 800, abr: 128 },
+  { name: "480p", width: 854,  height: 480, vbr: 400, abr: 96 },
+  { name: "360p", width: 640,  height: 360, vbr: 200, abr: 64 },
+];
+
 // Ensure directories exist
 if (!fs.existsSync(HLS_DIR)) fs.mkdirSync(HLS_DIR);
+if (ABR) {
+  for (const v of VARIANTS) {
+    const dir = path.join(HLS_DIR, v.name);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  }
+}
 if (!fs.existsSync(CLIPS_DIR)) fs.mkdirSync(CLIPS_DIR);
+
+// Highest-quality segments directory (for snapshots + clips)
+const SEGMENTS_DIR = ABR ? path.join(HLS_DIR, VARIANTS[0].name) : HLS_DIR;
+
+// Write HLS master playlist referencing variant streams
+function writeMasterPlaylist() {
+  const hasAudio = MIC !== "none";
+  const lines = ["#EXTM3U"];
+  if (ABR) {
+    for (const v of VARIANTS) {
+      const bw = (v.vbr + (hasAudio ? v.abr : 0)) * 1000;
+      lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${bw},RESOLUTION=${v.width}x${v.height},NAME="${v.name}"`);
+      lines.push(`${v.name}/stream.m3u8`);
+    }
+  } else {
+    const bw = hasAudio ? 928000 : 800000;
+    lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${bw},RESOLUTION=1280x720`);
+    lines.push("stream.m3u8");
+  }
+  fs.writeFileSync(path.join(HLS_DIR, "master.m3u8"), lines.join("\n") + "\n");
+}
 
 const app = express();
 
@@ -59,13 +94,13 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Snapshot: extract a frame from the latest HLS segment
 app.get("/snapshot", (req, res) => {
-  const files = fs.readdirSync(HLS_DIR)
+  const files = fs.readdirSync(SEGMENTS_DIR)
     .filter(f => f.endsWith(".ts"))
     .sort();
   if (files.length === 0) {
     return res.status(503).send("No segments yet");
   }
-  const latest = path.join(HLS_DIR, files[files.length - 1]);
+  const latest = path.join(SEGMENTS_DIR, files[files.length - 1]);
   const ff = spawn("ffmpeg", [
     "-i", latest,
     "-frames:v", "1",
@@ -81,7 +116,7 @@ app.get("/snapshot", (req, res) => {
   ff.on("error", () => res.status(500).end());
 });
 
-// Bark detection events
+// SSE events
 app.use(express.json());
 const sseClients = new Set();
 
@@ -105,7 +140,7 @@ function captureClip(eventType, confidence) {
   const thumbPath = path.join(CLIPS_DIR, `${clipId}.jpg`);
   const metaPath = path.join(CLIPS_DIR, `${clipId}.json`);
 
-  const segments = fs.readdirSync(HLS_DIR)
+  const segments = fs.readdirSync(SEGMENTS_DIR)
     .filter(f => f.endsWith(".ts"))
     .sort();
   if (segments.length === 0) return Promise.resolve(null);
@@ -115,7 +150,7 @@ function captureClip(eventType, confidence) {
 
   const concatFile = path.join(CLIPS_DIR, `${clipId}_concat.txt`);
   const concatList = clipSegments
-    .map(s => `file '${path.join(HLS_DIR, s)}'`)
+    .map(s => `file '${path.join(SEGMENTS_DIR, s)}'`)
     .join("\n");
   fs.writeFileSync(concatFile, concatList);
 
@@ -160,32 +195,40 @@ function captureClip(eventType, confidence) {
   });
 }
 
+function broadcast(event) {
+  const data = JSON.stringify(event);
+  for (const client of sseClients) {
+    try {
+      client.write(`data: ${data}\n\n`);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+}
+
 app.post("/bark", (req, res) => {
   const type = req.body.type === "whine" ? "whine" : "bark";
+  const confidence = req.body.confidence || 0.5;
   const event = {
     type,
-    confidence: req.body.confidence,
+    confidence,
     timestamp: new Date().toISOString(),
   };
   const label = type === "whine" ? "WHINE" : "BARK";
-  console.log(`[${label}] ${event.timestamp} (confidence: ${(event.confidence * 100).toFixed(0)}%)`);
+  console.log(`[${label}] ${event.timestamp} (confidence: ${(confidence * 100).toFixed(0)}%)`);
 
   const now = Date.now();
   if (now - lastClipTime > CLIP_COOLDOWN) {
     lastClipTime = now;
-    captureClip(type, req.body.confidence).then((meta) => {
+    captureClip(type, confidence).then((meta) => {
       if (meta) {
         console.log(`[CLIP] Saved ${meta.clip} (${meta.duration}s)`);
         event.clip = meta;
       }
-      for (const client of sseClients) {
-        client.write(`data: ${JSON.stringify(event)}\n\n`);
-      }
+      broadcast(event);
     });
   } else {
-    for (const client of sseClients) {
-      client.write(`data: ${JSON.stringify(event)}\n\n`);
-    }
+    broadcast(event);
   }
   res.json({ ok: true });
 });
@@ -209,43 +252,106 @@ app.use("/clips", express.static(CLIPS_DIR));
 // Start ffmpeg capture
 function startFFmpeg() {
   // Clean old segments
-  for (const f of fs.readdirSync(HLS_DIR)) {
-    fs.unlinkSync(path.join(HLS_DIR, f));
+  if (ABR) {
+    for (const v of VARIANTS) {
+      const dir = path.join(HLS_DIR, v.name);
+      for (const f of fs.readdirSync(dir)) {
+        fs.unlinkSync(path.join(dir, f));
+      }
+    }
+  } else {
+    for (const f of fs.readdirSync(HLS_DIR)) {
+      if (f === "master.m3u8") continue;
+      fs.unlinkSync(path.join(HLS_DIR, f));
+    }
   }
 
-  const audioInput = MIC === "none" ? "none" : MIC;
-  const args = [
-    "-f", "avfoundation",
-    "-framerate", "30",
-    "-video_size", "1280x720",
-    "-i", `${CAMERA}:${audioInput}`,
-    "-c:v", "libx264",
-    "-preset", "ultrafast",
-    "-tune", "zerolatency",
-    "-b:v", "800k",       // cap bitrate for smoother streaming over tunnel
-    "-maxrate", "800k",
-    "-bufsize", "1600k",
-    "-g", "30",           // keyframe every 1s at 30fps
-    "-sc_threshold", "0",
-    ...(audioInput !== "none" ? [
-      "-c:a", "aac",
-      "-b:a", "128k",
-      "-ac", "1",         // mono — sufficient for ambient audio
-    ] : ["-an"]),
-    "-f", "hls",
-    "-hls_time", "2",     // 2-second segments — smoother over tunnel
-    "-hls_list_size", "5",
-    "-hls_flags", "append_list",  // server handles segment cleanup
-    "-hls_segment_filename", path.join(HLS_DIR, "seg%03d.ts"),
-    path.join(HLS_DIR, "stream.m3u8"),
-  ];
+  writeMasterPlaylist();
 
-  console.log("Starting camera capture...");
+  const audioInput = MIC === "none" ? "none" : MIC;
+  const hasAudio = audioInput !== "none";
+  let args;
+
+  if (ABR) {
+    args = [
+      "-f", "avfoundation",
+      "-framerate", "30",
+      "-video_size", "1280x720",
+      "-i", `${CAMERA}:${audioInput}`,
+    ];
+
+    const numV = VARIANTS.length;
+    const splits = VARIANTS.map((_, i) => `[v${i}]`).join("");
+    let fc = `[0:v]split=${numV}${splits}`;
+    for (let i = 1; i < numV; i++) {
+      const v = VARIANTS[i];
+      fc += `;[v${i}]scale=${v.width}:${v.height}[v${i}out]`;
+    }
+    args.push("-filter_complex", fc);
+
+    for (let i = 0; i < numV; i++) {
+      const v = VARIANTS[i];
+      const videoLabel = i === 0 ? `[v${i}]` : `[v${i}out]`;
+      const varDir = path.join(HLS_DIR, v.name);
+
+      args.push("-map", videoLabel);
+      if (hasAudio) args.push("-map", "0:a");
+
+      args.push(
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-tune", "zerolatency",
+        "-b:v", `${v.vbr}k`,
+        "-maxrate", `${v.vbr}k`,
+        "-bufsize", `${v.vbr * 2}k`,
+        "-g", "30",
+        "-sc_threshold", "0",
+      );
+
+      if (hasAudio) {
+        args.push("-c:a", "aac", "-b:a", `${v.abr}k`, "-ac", "1");
+      } else {
+        args.push("-an");
+      }
+
+      args.push(
+        "-f", "hls",
+        "-hls_time", "2",
+        "-hls_list_size", "5",
+        "-hls_flags", "append_list",
+        "-hls_segment_filename", path.join(varDir, "seg%03d.ts"),
+        path.join(varDir, "stream.m3u8"),
+      );
+    }
+  } else {
+    args = [
+      "-f", "avfoundation",
+      "-framerate", "30",
+      "-video_size", "1280x720",
+      "-i", `${CAMERA}:${audioInput}`,
+      "-c:v", "libx264",
+      "-preset", "ultrafast",
+      "-tune", "zerolatency",
+      "-b:v", "800k",
+      "-maxrate", "800k",
+      "-bufsize", "1600k",
+      "-g", "30",
+      "-sc_threshold", "0",
+      ...(hasAudio ? ["-c:a", "aac", "-b:a", "128k", "-ac", "1"] : ["-an"]),
+      "-f", "hls",
+      "-hls_time", "2",
+      "-hls_list_size", "5",
+      "-hls_flags", "append_list",
+      "-hls_segment_filename", path.join(HLS_DIR, "seg%03d.ts"),
+      path.join(HLS_DIR, "stream.m3u8"),
+    ];
+  }
+
+  console.log(`Starting camera capture${ABR ? " (ABR: 720p/480p/360p)" : ""}...`);
   const ffmpeg = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
 
   ffmpeg.stderr.on("data", (data) => {
     const msg = data.toString();
-    // Only log important messages, not frame-by-frame stats
     if (msg.includes("Error") || msg.includes("error") || msg.includes("Opening")) {
       console.error("[ffmpeg]", msg.trim());
     }
@@ -261,17 +367,20 @@ function startFFmpeg() {
 
 const ffmpegProcess = startFFmpeg();
 
-// Server-side segment cleanup (replaces ffmpeg's delete_segments)
+// Server-side segment cleanup
 setInterval(() => {
-  const segments = fs.readdirSync(HLS_DIR)
-    .filter(f => f.endsWith(".ts"))
-    .sort();
-  if (segments.length > MAX_SEGMENTS) {
-    const toDelete = segments
-      .slice(0, segments.length - MAX_SEGMENTS)
-      .filter(seg => !activeCaptures.has(seg));
-    for (const seg of toDelete) {
-      try { fs.unlinkSync(path.join(HLS_DIR, seg)); } catch {}
+  const dirs = ABR ? VARIANTS.map(v => path.join(HLS_DIR, v.name)) : [HLS_DIR];
+  for (const dir of dirs) {
+    const segments = fs.readdirSync(dir)
+      .filter(f => f.endsWith(".ts"))
+      .sort();
+    if (segments.length > MAX_SEGMENTS) {
+      const toDelete = segments
+        .slice(0, segments.length - MAX_SEGMENTS)
+        .filter(seg => !activeCaptures.has(seg));
+      for (const seg of toDelete) {
+        try { fs.unlinkSync(path.join(dir, seg)); } catch {}
+      }
     }
   }
 }, 4000);
@@ -295,9 +404,8 @@ setInterval(() => {
 
 app.listen(PORT, () => {
   console.log(`\n  OllieCam running at http://localhost:${PORT}`);
-  if (PASSWORD) {
-    console.log(`  Password: ${PASSWORD}`);
-  }
+  if (ABR) console.log("  Adaptive bitrate: 720p / 480p / 360p");
+  if (PASSWORD) console.log(`  Password: ${PASSWORD}`);
   console.log(`  Camera device: ${CAMERA}\n`);
 });
 

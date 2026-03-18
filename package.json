@@ -5,6 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "detect": "node detector.js",
+    "start:all": "node server.js & node detector.js",
     "dev": "node server.js & vite",
     "tunnel": "node server.js & cloudflared tunnel run dogcam",
     "build": "vite build",

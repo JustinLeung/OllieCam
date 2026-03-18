@@ -6,7 +6,7 @@ Built with Node.js, ffmpeg (HLS), and hls.js.
 
 ## Features
 
-- Live video + audio streaming via HLS
+- Live video + audio streaming via HLS with adaptive bitrate (720p/480p/360p)
 - Bark and whine detection using Web Audio API frequency analysis
 - Real-time alerts broadcast to all viewers via Server-Sent Events
 - Play/pause with live snapshot preview
@@ -52,6 +52,7 @@ Runs the Express backend and Vite dev server with hot reloading. Open http://loc
 | `CAMERA`   | `0`         | AVFoundation video device index                      |
 | `MIC`      | `default`   | AVFoundation audio device index (`none` to disable)  |
 | `PASSWORD` | _(empty)_   | Set to enable HTTP Basic Auth                        |
+| `ABR`      | `true`      | Adaptive bitrate streaming (`false` for single 720p) |
 
 To list available devices:
 

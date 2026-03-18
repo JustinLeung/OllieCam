@@ -22,8 +22,11 @@ Server-side frame differencing to detect movement. Use ffmpeg's scene-change det
 ### Push Notifications
 Alert the owner when they're not actively viewing. Options: Web Push API with service workers, ntfy.sh, Pushover, or Telegram bot. Needs cooldown/throttling to avoid notification fatigue.
 
-### Event Clips + Timeline
-Save a 10-30 second video clip and snapshot on each bark/whine/motion event. Store in a `clips/` directory with a `GET /clips` endpoint. Display a scrollable timeline in the UI with thumbnails.
+### ~~Event Clips + Timeline~~ ✅
+Implemented. See `docs/event-clips.md`.
+
+### ~~iOS Native Client~~ ✅
+Implemented. Native iOS app (Swift 6.2 + SwiftUI) with HLS playback, client-side bark/whine detection via vDSP FFT, SSE real-time alerts, and event clips timeline. See `docs/ios-client.md`.
 
 ## Nice to Have
 
@@ -36,8 +39,8 @@ Archive HLS segments to a `recordings/` directory instead of deleting them. Buil
 ### Activity Zones
 Let the user draw rectangles on the video to define regions of interest. Only trigger motion alerts when movement occurs within those zones. Reduces false positives from curtains, shadows, fans.
 
-### Adaptive Stream Quality
-Generate multiple HLS variant streams at different resolutions/bitrates (720p, 480p, 360p) with a master playlist. hls.js handles adaptive switching natively. Costs additional CPU for encoding.
+### ~~Adaptive Stream Quality~~ ✅
+Implemented. Multiple HLS variant streams (720p, 480p, 360p) with master playlist and client-side quality selector. See `docs/adaptive-bitrate.md`.
 
 ### Daily Activity Summary
 Persist events to SQLite or a JSON file. Generate daily summaries: total barks/whines, peak activity periods, quiet stretches. Expose via `GET /summary?date=YYYY-MM-DD` and a summary UI card. Optional email digest via nodemailer.
