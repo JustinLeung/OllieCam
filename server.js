@@ -13,11 +13,28 @@ const MAX_SEGMENTS = 60;  // keep ~60s of segments for clip capture (1s segments
 const MAX_CLIPS = 50;     // retention limit
 const CLIP_COOLDOWN = 15000; // minimum 15s between clips
 
-// Push notifications via ntfy.sh (set NTFY_TOPIC to enable)
-const NTFY_TOPIC = process.env.NTFY_TOPIC || "";
+// Push notifications via ntfy.sh (auto-generates topic on first run)
+const NTFY_CONFIG_FILE = path.join(__dirname, ".ntfy-topic");
 const NTFY_SERVER = process.env.NTFY_SERVER || "https://ntfy.sh";
 const NTFY_TOKEN = process.env.NTFY_TOKEN || "";
-const NTFY_COOLDOWN = parseInt(process.env.NTFY_COOLDOWN) || 60000; // 1 min between push notifications
+const NTFY_COOLDOWN = parseInt(process.env.NTFY_COOLDOWN) || 60000;
+
+function loadNtfyTopic() {
+  // Env var takes priority
+  if (process.env.NTFY_TOPIC) return process.env.NTFY_TOPIC;
+  // Check for saved topic
+  try {
+    const saved = fs.readFileSync(NTFY_CONFIG_FILE, "utf-8").trim();
+    if (saved) return saved;
+  } catch {}
+  // Auto-generate and persist
+  const topic = "olliecam-" + require("crypto").randomBytes(4).toString("hex");
+  fs.writeFileSync(NTFY_CONFIG_FILE, topic + "\n");
+  console.log(`[NTFY] Generated topic: ${topic}`);
+  return topic;
+}
+
+const NTFY_TOPIC = loadNtfyTopic();
 
 // Adaptive bitrate streaming (set ABR=false to use single 720p stream)
 const ABR = (process.env.ABR || "true").toLowerCase() !== "false";
@@ -518,7 +535,8 @@ app.listen(PORT, () => {
   console.log(`\n  OllieCam running at http://localhost:${PORT}`);
   if (ABR) console.log("  Adaptive bitrate: 720p / 480p / 360p");
   if (PASSWORD) console.log(`  Password: ${PASSWORD}`);
-  if (NTFY_TOPIC) console.log(`  Push notifications: ${NTFY_SERVER}/${NTFY_TOPIC}`);
+  console.log(`  Push notifications: ${NTFY_SERVER}/${NTFY_TOPIC}`);
+  console.log(`  Subscribe in ntfy app: ${NTFY_TOPIC}`);
   console.log(`  Camera device: ${CAMERA}\n`);
 });
 

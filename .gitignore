@@ -2,6 +2,7 @@ node_modules/
 stream/
 clips/
 dist/
+.ntfy-topic
 
 # iOS
 ios/OllieCam.xcodeproj/
