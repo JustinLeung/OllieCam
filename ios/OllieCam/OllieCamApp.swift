@@ -4,27 +4,47 @@ import SwiftUI
 struct OllieCamApp: App {
     @State private var serverStore = ServerStore()
     @State private var settingsViewModel = SettingsViewModel()
-    @State private var showSplash = true
+    @State private var appState: AppState = .splash
+
+    enum AppState {
+        case splash
+        case onboarding
+        case main
+    }
 
     var body: some Scene {
         WindowGroup {
             ZStack {
-                ContentView()
+                switch appState {
+                case .splash:
+                    SplashView()
+
+                case .onboarding:
+                    OnboardingView {
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            appState = .main
+                        }
+                    }
                     .environment(serverStore)
                     .environment(settingsViewModel)
-                    .opacity(showSplash ? 0 : 1)
+                    .transition(.opacity)
 
-                if showSplash {
-                    SplashView()
+                case .main:
+                    ContentView()
+                        .environment(serverStore)
+                        .environment(settingsViewModel)
                         .transition(.opacity)
                 }
             }
+            .animation(.easeInOut(duration: 0.4), value: appState)
             .task {
                 try? await Task.sleep(for: .seconds(1.6))
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    showSplash = false
+                withAnimation {
+                    appState = serverStore.isConfigured ? .main : .onboarding
                 }
             }
         }
     }
 }
+
+extension OllieCamApp.AppState: Equatable {}

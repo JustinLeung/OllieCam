@@ -36,6 +36,9 @@ function loadNtfyTopic() {
 
 const NTFY_TOPIC = loadNtfyTopic();
 
+// Night vision mode (boosted brightness/contrast/gamma for low light)
+let nightVision = false;
+
 // Adaptive bitrate streaming (set ABR=false to use single 720p stream)
 const ABR = (process.env.ABR || "true").toLowerCase() !== "false";
 const VARIANTS = [
@@ -378,6 +381,21 @@ app.post("/api/notifications/test", async (req, res) => {
   }
 });
 
+// --- Night Vision API ---
+app.get("/api/nightvision", (req, res) => {
+  res.json({ enabled: nightVision });
+});
+
+app.post("/api/nightvision", (req, res) => {
+  const enabled = req.body.enabled !== undefined ? !!req.body.enabled : !nightVision;
+  if (enabled === nightVision) return res.json({ enabled: nightVision });
+  nightVision = enabled;
+  console.log(`[NIGHT VISION] ${nightVision ? "ON" : "OFF"} — restarting ffmpeg`);
+  broadcast({ type: "nightvision", enabled: nightVision });
+  restartFFmpeg();
+  res.json({ enabled: nightVision });
+});
+
 // Start ffmpeg capture
 function startFFmpeg() {
   // Clean old segments
@@ -411,7 +429,12 @@ function startFFmpeg() {
 
     const numV = VARIANTS.length;
     const splits = VARIANTS.map((_, i) => `[v${i}]`).join("");
-    let fc = `[0:v]split=${numV}${splits}`;
+    let fc;
+    if (nightVision) {
+      fc = `[0:v]eq=brightness=0.1:contrast=1.5:gamma=2.0[veq];[veq]split=${numV}${splits}`;
+    } else {
+      fc = `[0:v]split=${numV}${splits}`;
+    }
     for (let i = 1; i < numV; i++) {
       const v = VARIANTS[i];
       fc += `;[v${i}]scale=${v.width}:${v.height}[v${i}out]`;
@@ -458,6 +481,7 @@ function startFFmpeg() {
       "-framerate", "30",
       "-video_size", "1280x720",
       "-i", `${CAMERA}:${audioInput}`,
+      ...(nightVision ? ["-vf", "eq=brightness=0.1:contrast=1.5:gamma=2.0"] : []),
       "-c:v", "libx264",
       "-preset", "ultrafast",
       "-tune", "zerolatency",
@@ -494,7 +518,13 @@ function startFFmpeg() {
   return ffmpeg;
 }
 
-const ffmpegProcess = startFFmpeg();
+let ffmpegProcess = startFFmpeg();
+
+function restartFFmpeg() {
+  ffmpegProcess.removeAllListeners("close");
+  ffmpegProcess.kill("SIGTERM");
+  ffmpegProcess = startFFmpeg();
+}
 
 // Server-side segment cleanup
 setInterval(() => {

@@ -12,6 +12,7 @@ Built with Node.js, ffmpeg (HLS), and hls.js. MIT licensed.
 - Real-time alerts broadcast to all viewers via Server-Sent Events
 - Push notifications via ntfy.sh (bark/whine alerts when away)
 - Event clips: auto-saved ~30s video clips on bark/whine detection
+- Night vision mode (brightness/contrast/gamma boost for low light)
 - Screenshot download from live stream
 - Live viewer count
 - Play/pause with live snapshot preview
@@ -142,12 +143,13 @@ clips/                 # Saved event clips (auto-cleaned)
 - [Bark/Whine Detection](docs/bark-detection.md) — web client audio analysis algorithm
 - [Detector](docs/detector.md) — server-side detector, calibration guide
 - [Event Clips](docs/event-clips.md) — clip capture, timeline UI, retention
+- [Night Vision](docs/night-vision.md) — low-light enhancement, tuning parameters
 - [Push Notifications](docs/push-notifications.md) — ntfy.sh setup, throttling, self-hosting
 - [iOS Client](docs/ios-client.md) — setup, architecture, features
 
 ## Roadmap
 
-See [FEATURES.md](FEATURES.md) for planned features including two-way audio, motion detection, night vision, and more.
+See [FEATURES.md](FEATURES.md) for planned features including two-way audio, motion detection, and more.
 
 ## License
 

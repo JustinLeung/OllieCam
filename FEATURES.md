@@ -18,8 +18,8 @@ Implemented via ntfy.sh. Server sends push notifications on bark/whine events wi
 
 ## Nice to Have
 
-### Night Vision Enhancement
-Boost brightness/contrast/gamma in low light via ffmpeg video filters (`eq=brightness=0.1:contrast=1.5:gamma=2.0`). Can be auto-triggered by monitoring average frame brightness or toggled manually.
+### ~~Night Vision Enhancement~~ Done
+Implemented as a manual toggle. `POST /api/nightvision` toggles the ffmpeg `eq` filter (brightness=0.1, contrast=1.5, gamma=2.0) and restarts the encoder. State syncs across all viewers via SSE. See `docs/night-vision.md`.
 
 ### Continuous Recording with Playback
 Archive HLS segments to a `recordings/` directory instead of deleting them. Build a playback endpoint for time-range queries. ~350 MB/hour at 720p/800kbps — needs retention/cleanup logic.
