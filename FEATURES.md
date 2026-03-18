@@ -26,7 +26,7 @@ Alert the owner when they're not actively viewing. Options: Web Push API with se
 Implemented. See `docs/event-clips.md`.
 
 ### ~~iOS Native Client~~ ✅
-Implemented. Native iOS app (Swift 6.2 + SwiftUI) with HLS playback, client-side bark/whine detection via vDSP FFT, SSE real-time alerts, and event clips timeline. See `docs/ios-client.md`.
+Implemented. Native iOS app (Swift 6.2 + SwiftUI) with HLS playback, SSE real-time alerts, and event clips timeline. See `docs/ios-client.md`.
 
 ## Nice to Have
 

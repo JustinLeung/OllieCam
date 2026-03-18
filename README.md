@@ -140,6 +140,10 @@ clips/                 # Saved event clips (auto-cleaned)
 - [Event Clips](docs/event-clips.md) — clip capture, timeline UI, retention
 - [iOS Client](docs/ios-client.md) — setup, architecture, features
 
+## Roadmap
+
+See [FEATURES.md](FEATURES.md) for planned features including two-way audio, motion detection, push notifications, night vision, and more.
+
 ## License
 
 [MIT](LICENSE)
