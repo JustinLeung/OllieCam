@@ -21,7 +21,7 @@ stream/
   master.m3u8          # master playlist referencing all variants
   720p/
     stream.m3u8        # variant playlist
-    seg000.ts, ...     # 2-second segments
+    seg000.ts, ...     # 1-second segments
   480p/
     stream.m3u8
     seg000.ts, ...
@@ -39,7 +39,7 @@ The master playlist (`stream/master.m3u8`) is a standard HLS multivariant playli
 
 ### Segment Cleanup
 
-Server-side cleanup runs every 4 seconds and removes old segments from all variant directories, keeping the most recent 30 segments (~60 seconds) per variant. Segments involved in active clip capture are protected from deletion.
+Server-side cleanup runs every 4 seconds and removes old segments from all variant directories, keeping the most recent 60 segments (~60 seconds) per variant. Segments involved in active clip capture are protected from deletion.
 
 ### Snapshots and Clips
 
@@ -59,7 +59,7 @@ Encoding three variants simultaneously requires roughly 2-3x the CPU of a single
 
 ## Quality Selector UI
 
-When multiple quality levels are available, a quality button appears in the bottom-right of the video player (to the left of the mute button). Clicking it opens a menu with options:
+When multiple quality levels are available, a quality button appears in the control bar below the video. Clicking it opens a menu with options:
 
 - **Auto** — hls.js selects quality based on bandwidth (default)
 - **720p / 480p / 360p** — force a specific quality level
