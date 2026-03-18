@@ -102,6 +102,18 @@ function fft(re, im) {
   }
 }
 
+// Noise isolation: spectral contrast thresholds
+// A bark has energy concentrated in the bark band; music spreads energy everywhere.
+// Spectral contrast = bark band energy - energy outside bark band.
+// High contrast → bark. Low contrast → music/noise.
+const BARK_SPECTRAL_CONTRAST_MIN = 6;   // dB: bark band must exceed non-bark by this much
+const WHINE_SPECTRAL_CONTRAST_MIN = 4;  // dB: whine band must exceed non-whine by this much
+
+// Onset sharpness: barks rise fast, music changes gradually.
+// Track frame-to-frame energy delta; require sharp rise for bark.
+const BARK_ONSET_THRESHOLD = 10;  // dB rise from previous frame in bark band
+const ONSET_HISTORY = 3;          // frames to look back for onset
+
 // ============================================================
 // Detection state
 // ============================================================
@@ -110,8 +122,11 @@ const audioBuffer = new Float32Array(FFT_SIZE);
 let audioBufferPos = 0;
 let sampleCounter = 0;
 let bufferFilled = false;
+let frameCount = 0; // warmup counter — no detections until baseline is full
 
 const baselineHistory = [];
+const barkEnergyHistory = [];   // recent bark band energy for onset detection
+const whineEnergyHistory = [];  // recent whine band energy
 let whineFrames = 0;
 let lastBarkDetect = 0;
 let lastWhineDetect = 0;
@@ -120,6 +135,19 @@ function meanEnergy(dbArr, from, to) {
   let sum = 0;
   for (let i = from; i <= to; i++) sum += dbArr[i];
   return sum / (to - from + 1);
+}
+
+// Energy of bins OUTSIDE a given range (for spectral contrast)
+function meanEnergyOutside(dbArr, excludeFrom, excludeTo, halfSize) {
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < halfSize; i++) {
+    if (i < excludeFrom || i > excludeTo) {
+      sum += dbArr[i];
+      count++;
+    }
+  }
+  return count > 0 ? sum / count : -100;
 }
 
 function analyzeFrame() {
@@ -140,9 +168,31 @@ function analyzeFrame() {
   }
 
   // Band energies
-  const barkE = meanEnergy(db, BARK_LO_BIN, Math.min(BARK_HI_BIN, halfSize - 1));
-  const whineE = meanEnergy(db, WHINE_LO_BIN, Math.min(WHINE_HI_BIN, halfSize - 1));
+  const barkHiBin = Math.min(BARK_HI_BIN, halfSize - 1);
+  const whineHiBin = Math.min(WHINE_HI_BIN, halfSize - 1);
+  const barkE = meanEnergy(db, BARK_LO_BIN, barkHiBin);
+  const whineE = meanEnergy(db, WHINE_LO_BIN, whineHiBin);
   const totalE = meanEnergy(db, 0, halfSize - 1);
+
+  // Spectral contrast: how much more energy is in the target band vs the rest
+  const nonBarkE = meanEnergyOutside(db, BARK_LO_BIN, barkHiBin, halfSize);
+  const nonWhineE = meanEnergyOutside(db, WHINE_LO_BIN, whineHiBin, halfSize);
+  const barkContrast = barkE - nonBarkE;
+  const whineContrast = whineE - nonWhineE;
+
+  // Track energy history for onset detection
+  barkEnergyHistory.push(barkE);
+  if (barkEnergyHistory.length > ONSET_HISTORY + 1) barkEnergyHistory.shift();
+  whineEnergyHistory.push(whineE);
+  if (whineEnergyHistory.length > ONSET_HISTORY + 1) whineEnergyHistory.shift();
+
+  // Onset sharpness: max rise from any recent frame
+  let barkOnset = 0;
+  if (barkEnergyHistory.length > 1) {
+    for (let i = 0; i < barkEnergyHistory.length - 1; i++) {
+      barkOnset = Math.max(barkOnset, barkE - barkEnergyHistory[i]);
+    }
+  }
 
   // Rolling baseline
   baselineHistory.push(totalE);
@@ -152,18 +202,26 @@ function analyzeFrame() {
   const barkSpike = barkE - baseline;
   const whineSpike = whineE - baseline;
   const now = Date.now();
+  frameCount++;
 
-  // Bark detection
+  // Skip detection until baseline has filled (~5s warmup)
+  if (frameCount < BASELINE_WINDOW) return;
+
+  // Bark detection: spike + absolute + spectral contrast + sharp onset + cooldown
   if (barkSpike > BARK_SPIKE_THRESHOLD &&
       barkE > BARK_ABSOLUTE_THRESHOLD &&
+      barkContrast > BARK_SPECTRAL_CONTRAST_MIN &&
+      barkOnset > BARK_ONSET_THRESHOLD &&
       now - lastBarkDetect > BARK_COOLDOWN_MS) {
     const confidence = Math.min(barkSpike / 30, 1.0);
     lastBarkDetect = now;
     reportDetection("bark", confidence);
   }
 
-  // Whine detection
-  if (whineSpike > WHINE_SPIKE_THRESHOLD && whineE > WHINE_ABSOLUTE_THRESHOLD) {
+  // Whine detection: spike + absolute + spectral contrast + sustained + cooldown
+  if (whineSpike > WHINE_SPIKE_THRESHOLD &&
+      whineE > WHINE_ABSOLUTE_THRESHOLD &&
+      whineContrast > WHINE_SPECTRAL_CONTRAST_MIN) {
     whineFrames++;
     if (whineFrames >= WHINE_SUSTAINED_FRAMES && now - lastWhineDetect > WHINE_COOLDOWN_MS) {
       const confidence = Math.min(whineSpike / 20, 1.0);
