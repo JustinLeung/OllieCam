@@ -55,8 +55,8 @@ struct ServerListView: View {
                 }
             }
 
-            if let activeServer = serverStore.activeServer {
-                notificationsSection(for: activeServer)
+            if let server = serverStore.activeServer {
+                notificationsSection(for: server)
             }
         }
         .navigationTitle("Settings")
@@ -71,9 +71,17 @@ struct ServerListView: View {
             }
         }
         .task {
-            settingsVM.loadNotificationSettings()
             if let server = serverStore.activeServer {
-                await settingsVM.fetchNotificationConfig(for: server)
+                await settingsVM.fetchNotificationConfig(for: server, store: serverStore)
+            }
+        }
+        .onChange(of: serverStore.activeServerID) {
+            copiedTopic = false
+            settingsVM.notificationTestStatus = .idle
+            Task {
+                if let server = serverStore.activeServer {
+                    await settingsVM.fetchNotificationConfig(for: server, store: serverStore)
+                }
             }
         }
     }
@@ -86,20 +94,20 @@ struct ServerListView: View {
             HStack {
                 Text("Push Notifications")
                 Spacer()
-                if settingsVM.notificationsEnabled {
+                if server.hasNotifications {
                     Text("Enabled")
                         .foregroundStyle(.green)
                         .font(.caption)
                 } else {
-                    Text("Not configured")
+                    Text("Not detected")
                         .foregroundStyle(.secondary)
                         .font(.caption)
                 }
             }
 
-            if settingsVM.notificationsEnabled {
+            if server.hasNotifications {
                 Button {
-                    UIPasteboard.general.string = settingsVM.ntfyTopic
+                    UIPasteboard.general.string = server.ntfyTopic
                     copiedTopic = true
                     Task {
                         try? await Task.sleep(for: .seconds(1.5))
@@ -110,13 +118,13 @@ struct ServerListView: View {
                         Text("Topic")
                             .foregroundStyle(.primary)
                         Spacer()
-                        Text(copiedTopic ? "Copied!" : settingsVM.ntfyTopic)
+                        Text(copiedTopic ? "Copied!" : server.ntfyTopic)
                             .foregroundStyle(copiedTopic ? .green : .secondary)
                     }
                     .font(.caption)
                 }
 
-                if let subscribeURL = settingsVM.ntfySubscribeURL {
+                if let subscribeURL = server.ntfySubscribeURL {
                     Button {
                         openURL(subscribeURL)
                     } label: {
@@ -139,14 +147,20 @@ struct ServerListView: View {
                     }
                 }
                 .disabled(settingsVM.notificationTestStatus == .sending)
+            } else {
+                Button("Refresh from Server") {
+                    Task {
+                        await settingsVM.fetchNotificationConfig(for: server, store: serverStore)
+                    }
+                }
             }
         } header: {
             Text("Notifications")
         } footer: {
-            if settingsVM.notificationsEnabled {
+            if server.hasNotifications {
                 Text("Install the [ntfy app](https://apps.apple.com/app/ntfy/id1625396347) and tap Subscribe to receive push notifications.")
             } else {
-                Text("Push notifications are auto-configured on the server. Ensure the server is running to detect notification settings.")
+                Text("Notifications are auto-configured on the server. Tap Refresh to detect.")
             }
         }
     }

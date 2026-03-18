@@ -5,6 +5,8 @@ struct ServerConfiguration: Sendable, Equatable, Hashable, Identifiable {
     var name: String
     var serverURL: String
     var password: String
+    var ntfyTopic: String
+    var ntfyServer: String
 
     var baseURL: URL? {
         var urlString = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,11 +30,20 @@ struct ServerConfiguration: Sendable, Equatable, Hashable, Identifiable {
         return "Basic \(data.base64EncodedString())"
     }
 
-    init(id: UUID = UUID(), name: String = "", serverURL: String = "", password: String = "") {
+    var hasNotifications: Bool { !ntfyTopic.isEmpty }
+
+    var ntfySubscribeURL: URL? {
+        guard hasNotifications else { return nil }
+        return URL(string: "\(ntfyServer)/\(ntfyTopic)")
+    }
+
+    init(id: UUID = UUID(), name: String = "", serverURL: String = "", password: String = "", ntfyTopic: String = "", ntfyServer: String = Constants.Notifications.defaultNtfyServer) {
         self.id = id
         self.name = name
         self.serverURL = serverURL
         self.password = password
+        self.ntfyTopic = ntfyTopic
+        self.ntfyServer = ntfyServer
     }
 
     static let empty = ServerConfiguration()

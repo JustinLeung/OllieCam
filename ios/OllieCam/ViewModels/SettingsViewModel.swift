@@ -11,10 +11,7 @@ final class SettingsViewModel {
     var connectionStatus: ConnectionStatus = .idle
     var errorMessage: String?
 
-    // Notification settings
-    var ntfyTopic: String = ""
-    var ntfyServer: String = Constants.Notifications.defaultNtfyServer
-    var notificationsEnabled: Bool = false
+    // Notification test state
     var notificationTestStatus: NotificationTestStatus = .idle
 
     private let apiClient = APIClient()
@@ -89,17 +86,13 @@ final class SettingsViewModel {
 
     // MARK: - Notifications
 
-    func fetchNotificationConfig(for server: ServerConfiguration) async {
+    func fetchNotificationConfig(for server: ServerConfiguration, store: ServerStore) async {
         await apiClient.updateConfiguration(server)
         do {
             let config = try await apiClient.fetchNotificationConfig()
-            notificationsEnabled = config.enabled
-            if let topic = config.topic, !topic.isEmpty {
-                ntfyTopic = topic
+            if config.enabled, let topic = config.topic, !topic.isEmpty {
+                store.updateNotificationConfig(serverID: server.id, topic: topic, server: config.server)
             }
-            ntfyServer = config.server
-            KeychainHelper.save(ntfyTopic, forKey: Constants.Keychain.ntfyTopicKey)
-            KeychainHelper.save(ntfyServer, forKey: Constants.Keychain.ntfyServerKey)
         } catch {
             // Server may not support notifications yet
         }
@@ -114,16 +107,5 @@ final class SettingsViewModel {
         } catch {
             notificationTestStatus = .failed(error.localizedDescription)
         }
-    }
-
-    var ntfySubscribeURL: URL? {
-        guard !ntfyTopic.isEmpty else { return nil }
-        return URL(string: "\(ntfyServer)/\(ntfyTopic)")
-    }
-
-    func loadNotificationSettings() {
-        ntfyTopic = KeychainHelper.load(forKey: Constants.Keychain.ntfyTopicKey) ?? ""
-        ntfyServer = KeychainHelper.load(forKey: Constants.Keychain.ntfyServerKey)
-            ?? Constants.Notifications.defaultNtfyServer
     }
 }

@@ -52,12 +52,21 @@ final class ServerStore {
         persistServers()
     }
 
+    func updateNotificationConfig(serverID: UUID, topic: String, server: String) {
+        guard let index = servers.firstIndex(where: { $0.id == serverID }) else { return }
+        servers[index].ntfyTopic = topic
+        servers[index].ntfyServer = server
+        persistServers()
+    }
+
     // MARK: - Persistence
 
     private struct SavedServer: Codable {
         let id: UUID
         var name: String
         var serverURL: String
+        var ntfyTopic: String?
+        var ntfyServer: String?
     }
 
     private func loadServers() {
@@ -70,7 +79,9 @@ final class ServerStore {
                 id: s.id,
                 name: s.name,
                 serverURL: s.serverURL,
-                password: loadPassword(for: s.id)
+                password: loadPassword(for: s.id),
+                ntfyTopic: s.ntfyTopic ?? "",
+                ntfyServer: s.ntfyServer ?? Constants.Notifications.defaultNtfyServer
             )
         }
         if let idString = UserDefaults.standard.string(forKey: Constants.Storage.activeServerIDKey),
@@ -82,7 +93,7 @@ final class ServerStore {
     }
 
     private func persistServers() {
-        let saved = servers.map { SavedServer(id: $0.id, name: $0.name, serverURL: $0.serverURL) }
+        let saved = servers.map { SavedServer(id: $0.id, name: $0.name, serverURL: $0.serverURL, ntfyTopic: $0.ntfyTopic, ntfyServer: $0.ntfyServer) }
         if let data = try? JSONEncoder().encode(saved) {
             UserDefaults.standard.set(data, forKey: Constants.Storage.savedServersKey)
         }

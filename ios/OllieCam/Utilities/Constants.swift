@@ -20,8 +20,6 @@ enum Constants {
         static let urlKey = "serverURL"
         // Multi-server password prefix
         static let serverPasswordPrefix = "serverPassword-"
-        static let ntfyTopicKey = "ntfyTopic"
-        static let ntfyServerKey = "ntfyServer"
     }
 
     enum Storage {
