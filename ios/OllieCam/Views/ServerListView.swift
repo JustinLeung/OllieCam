@@ -6,6 +6,7 @@ struct ServerListView: View {
     @Environment(\.openURL) private var openURL
     @State private var showingAddServer = false
     @State private var editingServer: ServerConfiguration?
+    @State private var copiedTopic = false
 
     var body: some View {
         List {
@@ -97,8 +98,23 @@ struct ServerListView: View {
             }
 
             if settingsVM.notificationsEnabled {
-                LabeledContent("Topic", value: settingsVM.ntfyTopic)
+                Button {
+                    UIPasteboard.general.string = settingsVM.ntfyTopic
+                    copiedTopic = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        copiedTopic = false
+                    }
+                } label: {
+                    HStack {
+                        Text("Topic")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(copiedTopic ? "Copied!" : settingsVM.ntfyTopic)
+                            .foregroundStyle(copiedTopic ? .green : .secondary)
+                    }
                     .font(.caption)
+                }
 
                 if let subscribeURL = settingsVM.ntfySubscribeURL {
                     Button {
