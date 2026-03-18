@@ -20,6 +20,7 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UILaunchStoryboardName: ""
         INFOPLIST_KEY_NSCameraUsageDescription: "OllieCam needs camera access for local testing"
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "OllieCam needs microphone access for local testing"
     postBuildScripts:
