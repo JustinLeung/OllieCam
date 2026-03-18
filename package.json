@@ -1,0 +1,19 @@
+{
+  "name": "olliecam",
+  "version": "1.0.0",
+  "description": "Live OllieCam via Mac camera",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js & vite",
+    "tunnel": "node server.js & cloudflared tunnel run dogcam",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "vite": "^8.0.0"
+  }
+}
