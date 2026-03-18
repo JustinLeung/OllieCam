@@ -10,6 +10,7 @@ Built with Node.js, ffmpeg (HLS), and hls.js. MIT licensed.
 - ~3-4 second end-to-end latency
 - Server-side bark/whine detection with FFT analysis, spectral contrast, and onset detection
 - Real-time alerts broadcast to all viewers via Server-Sent Events
+- Push notifications via ntfy.sh (bark/whine alerts when away)
 - Event clips: auto-saved ~30s video clips on bark/whine detection
 - Screenshot download from live stream
 - Live viewer count
@@ -88,6 +89,9 @@ All thresholds are configurable via environment variables. Run `DEBUG=1 node det
 | `MIC`      | `default`   | AVFoundation audio device index (`none` to disable)  |
 | `PASSWORD` | _(empty)_   | Set to enable HTTP Basic Auth                        |
 | `ABR`      | `true`      | Adaptive bitrate streaming (`false` for single 720p) |
+| `NTFY_TOPIC` | _(empty)_ | ntfy.sh topic for push notifications (disabled if unset) |
+| `NTFY_SERVER` | `https://ntfy.sh` | ntfy server URL (for self-hosted) |
+| `NTFY_COOLDOWN` | `60000` | Minimum ms between push notifications |
 
 ### Detector
 
@@ -138,11 +142,12 @@ clips/                 # Saved event clips (auto-cleaned)
 - [Bark/Whine Detection](docs/bark-detection.md) — web client audio analysis algorithm
 - [Detector](docs/detector.md) — server-side detector, calibration guide
 - [Event Clips](docs/event-clips.md) — clip capture, timeline UI, retention
+- [Push Notifications](docs/push-notifications.md) — ntfy.sh setup, throttling, self-hosting
 - [iOS Client](docs/ios-client.md) — setup, architecture, features
 
 ## Roadmap
 
-See [FEATURES.md](FEATURES.md) for planned features including two-way audio, motion detection, push notifications, night vision, and more.
+See [FEATURES.md](FEATURES.md) for planned features including two-way audio, motion detection, night vision, and more.
 
 ## License
 

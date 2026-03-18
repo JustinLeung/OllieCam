@@ -13,8 +13,8 @@ A "talk" button that captures the viewer's mic via `getUserMedia()` and plays it
 ### Motion Detection
 Server-side frame differencing to detect movement. Use ffmpeg's scene-change detection or periodic snapshot comparison with `pixelmatch`/`sharp`. Hook into the existing SSE broadcast for alerts.
 
-### Push Notifications
-Alert the owner when they're not actively viewing. Options: Web Push API with service workers, ntfy.sh, Pushover, or Telegram bot. Needs cooldown/throttling to avoid notification fatigue.
+### ~~Push Notifications~~ Done
+Implemented via ntfy.sh. Server sends push notifications on bark/whine events with configurable cooldown. iOS Settings UI auto-discovers ntfy config from server. See `docs/push-notifications.md`.
 
 ## Nice to Have
 

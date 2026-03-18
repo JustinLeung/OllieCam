@@ -13,6 +13,12 @@ const MAX_SEGMENTS = 60;  // keep ~60s of segments for clip capture (1s segments
 const MAX_CLIPS = 50;     // retention limit
 const CLIP_COOLDOWN = 15000; // minimum 15s between clips
 
+// Push notifications via ntfy.sh (set NTFY_TOPIC to enable)
+const NTFY_TOPIC = process.env.NTFY_TOPIC || "";
+const NTFY_SERVER = process.env.NTFY_SERVER || "https://ntfy.sh";
+const NTFY_TOKEN = process.env.NTFY_TOKEN || "";
+const NTFY_COOLDOWN = parseInt(process.env.NTFY_COOLDOWN) || 60000; // 1 min between push notifications
+
 // Adaptive bitrate streaming (set ABR=false to use single 720p stream)
 const ABR = (process.env.ABR || "true").toLowerCase() !== "false";
 const VARIANTS = [
@@ -221,6 +227,42 @@ function broadcast(event) {
   }
 }
 
+// --- Push notifications via ntfy ---
+let lastPushTime = 0;
+
+async function sendPushNotification(type, confidence) {
+  if (!NTFY_TOPIC) return;
+  const now = Date.now();
+  if (now - lastPushTime < NTFY_COOLDOWN) return;
+  lastPushTime = now;
+
+  const label = type === "whine" ? "Whine" : "Bark";
+  const pct = (confidence * 100).toFixed(0);
+  const headers = {
+    "Title": "OllieCam",
+    "Priority": type === "bark" ? "high" : "default",
+    "Tags": "dog",
+  };
+  if (NTFY_TOKEN) {
+    headers["Authorization"] = `Bearer ${NTFY_TOKEN}`;
+  }
+
+  try {
+    const res = await fetch(`${NTFY_SERVER}/${NTFY_TOPIC}`, {
+      method: "POST",
+      headers,
+      body: `${label} detected (${pct}% confidence)`,
+    });
+    if (res.ok) {
+      console.log(`[PUSH] Sent ${type} notification`);
+    } else {
+      console.error(`[PUSH] Failed: ${res.status} ${res.statusText}`);
+    }
+  } catch (err) {
+    console.error(`[PUSH] Error: ${err.message}`);
+  }
+}
+
 app.post("/bark", (req, res) => {
   const type = req.body.type === "whine" ? "whine" : "bark";
   const confidence = req.body.confidence || 0.5;
@@ -231,6 +273,8 @@ app.post("/bark", (req, res) => {
   };
   const label = type === "whine" ? "WHINE" : "BARK";
   console.log(`[${label}] ${event.timestamp} (confidence: ${(confidence * 100).toFixed(0)}%)`);
+
+  sendPushNotification(type, confidence);
 
   const now = Date.now();
   if (now - lastClipTime > CLIP_COOLDOWN) {
@@ -279,6 +323,43 @@ app.delete("/api/clips/:id", (req, res) => {
 });
 
 app.use("/clips", express.static(CLIPS_DIR));
+
+// --- Notifications API ---
+app.get("/api/notifications/config", (req, res) => {
+  res.json({
+    enabled: !!NTFY_TOPIC,
+    topic: NTFY_TOPIC || null,
+    server: NTFY_SERVER,
+  });
+});
+
+app.post("/api/notifications/test", async (req, res) => {
+  if (!NTFY_TOPIC) {
+    return res.status(400).json({ error: "NTFY_TOPIC not configured" });
+  }
+  const headers = {
+    "Title": "OllieCam",
+    "Priority": "default",
+    "Tags": "white_check_mark",
+  };
+  if (NTFY_TOKEN) {
+    headers["Authorization"] = `Bearer ${NTFY_TOKEN}`;
+  }
+  try {
+    const ntfyRes = await fetch(`${NTFY_SERVER}/${NTFY_TOPIC}`, {
+      method: "POST",
+      headers,
+      body: "Test notification from OllieCam",
+    });
+    if (ntfyRes.ok) {
+      res.json({ ok: true });
+    } else {
+      res.status(502).json({ error: `ntfy responded ${ntfyRes.status}` });
+    }
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
 
 // Start ffmpeg capture
 function startFFmpeg() {
@@ -437,6 +518,7 @@ app.listen(PORT, () => {
   console.log(`\n  OllieCam running at http://localhost:${PORT}`);
   if (ABR) console.log("  Adaptive bitrate: 720p / 480p / 360p");
   if (PASSWORD) console.log(`  Password: ${PASSWORD}`);
+  if (NTFY_TOPIC) console.log(`  Push notifications: ${NTFY_SERVER}/${NTFY_TOPIC}`);
   console.log(`  Camera device: ${CAMERA}\n`);
 });
 

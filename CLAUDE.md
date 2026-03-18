@@ -21,12 +21,16 @@ OllieCam — a live dog cam web app that captures video and audio from a Mac's c
 - `PASSWORD` — If set, enables HTTP Basic Auth on all routes
 - `ABR` — Adaptive bitrate streaming (default: "true"; set to "false" for single 720p stream)
 - `SERVER_URL` — (detector.js only) OllieCam server URL (default: "http://localhost:3000")
+- `NTFY_TOPIC` — ntfy.sh topic name for push notifications (disabled if unset)
+- `NTFY_SERVER` — ntfy server URL (default: "https://ntfy.sh")
+- `NTFY_TOKEN` — Access token for private ntfy topics (optional)
+- `NTFY_COOLDOWN` — Minimum ms between push notifications (default: 60000)
 
 ## Architecture
 
 Two independent Node.js processes:
 
-1. **Streaming server** (`server.js`) — Express HTTP server + ffmpeg child process for video/audio capture. ffmpeg encodes HLS with ABR variants (720p/480p/360p). Serves HLS segments, static viewer page, snapshot (`GET /snapshot`), SSE (`GET /events`), bark reporting (`POST /bark`), clips API (`GET /api/clips`), and clip files (`/clips/`). Captures event clips on `POST /bark` and broadcasts via SSE.
+1. **Streaming server** (`server.js`) — Express HTTP server + ffmpeg child process for video/audio capture. ffmpeg encodes HLS with ABR variants (720p/480p/360p). Serves HLS segments, static viewer page, snapshot (`GET /snapshot`), SSE (`GET /events`), bark reporting (`POST /bark`), clips API (`GET /api/clips`), and clip files (`/clips/`). Captures event clips on `POST /bark`, broadcasts via SSE, and sends push notifications via ntfy.sh (if configured). Notification config/test endpoints at `GET /api/notifications/config` and `POST /api/notifications/test`.
 
 2. **Detector** (`detector.js`) — Standalone process that captures audio from the Mac mic via a separate ffmpeg instance, performs real-time FFT-based bark/whine detection, and reports events to the server via `POST /bark`. Can run on the same machine or remotely. Uses the same detection algorithm and thresholds as the original web client (500-3000 Hz bark band, 300-5000 Hz whine band, rolling baseline, sustained-frame whine detection).
 
@@ -60,6 +64,9 @@ Native iOS app in `ios/`. Uses XcodeGen (`project.yml`) — run `xcodegen genera
 ### iOS Architecture
 - **Swift 6.2 + SwiftUI**, targeting iOS 26+
 - `@Observable` + `@MainActor` ViewModels, strict concurrency
+- TabView navigation with three tabs: Live, Clips, Settings
+- System semantic colors for automatic light/dark mode support
+- Material backgrounds (`.ultraThinMaterial`, `.regularMaterial`) for overlays
 - AVPlayer + AVPlayerLayer (UIViewRepresentable) for HLS playback
 - SSE via URLSession.bytes for real-time bark/whine alerts (detection runs server-side via `detector.js`)
 - Keychain storage for server URL and password
@@ -70,5 +77,5 @@ Native iOS app in `ios/`. Uses XcodeGen (`project.yml`) — run `xcodegen genera
 - `ios/OllieCam/OllieCamApp.swift` — App entry point
 - `ios/OllieCam/Services/` — APIClient, SSEClient, HLSPlayerService
 - `ios/OllieCam/ViewModels/` — LiveStreamViewModel, ClipsViewModel, SettingsViewModel
-- `ios/OllieCam/Views/` — All SwiftUI views
-- `ios/OllieCam/Utilities/` — Constants, KeychainHelper, Color extension
+- `ios/OllieCam/Views/` — All SwiftUI views (ContentView with TabView, LiveStreamView, ClipsGridView, SettingsView, etc.)
+- `ios/OllieCam/Utilities/` — Constants, KeychainHelper

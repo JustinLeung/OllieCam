@@ -52,6 +52,8 @@ ios/OllieCam/
 ### Settings
 - Server URL + optional password (stored in Keychain via `KeychainHelper`)
 - Connection test with status indicator
+- Push notification status auto-detected from server (`GET /api/notifications/config`)
+- Send test notification button
 - Shown on first launch if not configured
 
 ## Server API Usage
@@ -63,6 +65,8 @@ ios/OllieCam/
 | `GET /events` | SSE stream for real-time bark/whine/viewer alerts |
 | `GET /api/clips` | Load clip metadata list |
 | `GET /clips/:file` | AsyncImage thumbnails, AVPlayer clip playback |
+| `GET /api/notifications/config` | Auto-discover ntfy push notification settings |
+| `POST /api/notifications/test` | Trigger a test push notification |
 
 ## Views
 

@@ -117,6 +117,39 @@ actor APIClient {
         url(for: "clips/\(filename)")
     }
 
+    // MARK: - Notifications
+
+    func fetchNotificationConfig() async throws -> NotificationConfig {
+        guard let url = url(for: "api/notifications/config") else {
+            throw APIError.invalidURL
+        }
+        let request = authorizedRequest(for: url)
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.invalidResponse
+        }
+        return try JSONDecoder().decode(NotificationConfig.self, from: data)
+    }
+
+    func sendTestNotification() async throws {
+        guard let url = url(for: "api/notifications/test") else {
+            throw APIError.invalidURL
+        }
+        var request = authorizedRequest(for: url)
+        request.httpMethod = "POST"
+        let (_, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        if httpResponse.statusCode == 400 {
+            throw APIError.serverError(400)
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.serverError(httpResponse.statusCode)
+        }
+    }
+
     // MARK: - HLS
 
     func streamURL() -> URL? {

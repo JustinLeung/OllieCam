@@ -10,7 +10,6 @@ enum Constants {
 
     enum UserInterface {
         static let alertDismissDelay: TimeInterval = 4
-        static let backgroundColor = "1a1a2e"
         static let maxActivityLogEntries: Int = 50
     }
 
@@ -18,5 +17,11 @@ enum Constants {
         static let service = "com.olliecam.server"
         static let passwordKey = "serverPassword"
         static let urlKey = "serverURL"
+        static let ntfyTopicKey = "ntfyTopic"
+        static let ntfyServerKey = "ntfyServer"
+    }
+
+    enum Notifications {
+        static let defaultNtfyServer = "https://ntfy.sh"
     }
 }

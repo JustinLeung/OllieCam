@@ -43,6 +43,46 @@ struct SettingsView: View {
                 }
             }
 
+            Section {
+                HStack {
+                    Text("Push Notifications")
+                    Spacer()
+                    if viewModel.notificationsEnabled {
+                        Text("Enabled")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                    } else {
+                        Text("Not configured")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                }
+
+                if viewModel.notificationsEnabled {
+                    LabeledContent("Topic", value: viewModel.ntfyTopic)
+                        .font(.caption)
+
+                    Button {
+                        Task { await viewModel.sendTestNotification() }
+                    } label: {
+                        HStack {
+                            Text("Send Test Notification")
+                            Spacer()
+                            notificationTestStatusView
+                        }
+                    }
+                    .disabled(viewModel.notificationTestStatus == .sending)
+                }
+
+                Button("Detect from Server") {
+                    Task { await viewModel.fetchNotificationConfig() }
+                }
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("Set NTFY_TOPIC on the server to enable. Install the ntfy app to receive push notifications when barking or whining is detected.")
+            }
+
             if viewModel.connectionStatus == .connected && isInitialSetup {
                 Section {
                     Button("Continue") {
@@ -53,14 +93,26 @@ struct SettingsView: View {
             }
         }
         .navigationTitle(isInitialSetup ? "Setup" : "Settings")
-        .toolbar {
-            if !isInitialSetup {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
+        .task {
+            if viewModel.isConfigured {
+                await viewModel.fetchNotificationConfig()
             }
+        }
+    }
+
+    @ViewBuilder
+    private var notificationTestStatusView: some View {
+        switch viewModel.notificationTestStatus {
+        case .idle:
+            EmptyView()
+        case .sending:
+            ProgressView()
+        case .sent:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .failed:
+            Image(systemName: "xmark.circle.fill")
+                .foregroundStyle(.red)
         }
     }
 
