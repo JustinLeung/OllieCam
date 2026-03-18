@@ -16,14 +16,14 @@ ffmpeg captures via AVFoundation and outputs HLS:
 | Bitrate | 800 kbps (capped) | Smooth delivery over tunnel |
 | Resolution | 1280x720 | HD quality |
 | Framerate | 30 fps | Smooth motion |
-| Keyframe interval | 30 frames (1s) | Frequent seek points |
+| Keyframe interval | 15 frames (0.5s) | Frequent seek points for 1s segments |
 | Audio codec | AAC, 128kbps, mono | Lightweight audio |
-| Segment duration | 2 seconds | Balance between latency and reliability |
-| Playlist size | 5 segments | Compact live playlist |
+| Segment duration | 1 second | Low-latency live streaming |
+| Playlist size | 10 segments | 10s live playlist window |
 
 ## Segment Management
 
-Segments are written to `stream/` with the `append_list` flag. The server handles deletion instead of ffmpeg, keeping the last 30 segments (~60 seconds) to support event clip capture.
+Segments are written to `stream/` with the `append_list` flag. The server handles deletion instead of ffmpeg, keeping the last 60 segments (~60 seconds) to support event clip capture.
 
 ## Client Playback
 
@@ -35,12 +35,12 @@ The viewer starts **paused** showing a snapshot from the camera (`GET /snapshot`
 
 | Setting | Value | Purpose |
 |---------|-------|---------|
-| `liveSyncDurationCount` | 4 | Target 4 segments behind live edge |
-| `liveMaxLatencyDurationCount` | 8 | Maximum 8 segments behind before seeking |
+| `liveSyncDurationCount` | 2 | Target 2 segments (2s) behind live edge |
+| `liveMaxLatencyDurationCount` | 4 | Maximum 4 segments (4s) behind before seeking |
 | `lowLatencyMode` | false | Prioritize smooth playback over low latency |
 | `backBufferLength` | 30 | Keep 30 seconds of back buffer |
 
-This results in ~8-16 seconds of buffered latency, which absorbs network jitter when streaming through Cloudflare Tunnel.
+This results in ~3-4 seconds of end-to-end latency (capture to display), with smooth playback through Cloudflare Tunnel.
 
 ### Audio Routing
 

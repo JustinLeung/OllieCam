@@ -262,6 +262,22 @@ app.get("/api/clips", (req, res) => {
   res.json(clips);
 });
 
+app.delete("/api/clips/:id", (req, res) => {
+  const id = req.params.id;
+  // Validate id contains only safe characters (alphanumeric, dash, underscore)
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    return res.status(400).json({ error: "Invalid clip ID" });
+  }
+  const metaPath = path.join(CLIPS_DIR, `${id}.json`);
+  if (!fs.existsSync(metaPath)) {
+    return res.status(404).json({ error: "Clip not found" });
+  }
+  for (const ext of [".json", ".mp4", ".jpg"]) {
+    try { fs.unlinkSync(path.join(CLIPS_DIR, `${id}${ext}`)); } catch {}
+  }
+  res.json({ ok: true });
+});
+
 app.use("/clips", express.static(CLIPS_DIR));
 
 // Start ffmpeg capture

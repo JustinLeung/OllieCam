@@ -58,14 +58,15 @@ Native iOS app in `ios/`. Uses XcodeGen (`project.yml`) — run `xcodegen genera
 ### iOS Architecture
 - **Swift 6.2 + SwiftUI**, targeting iOS 26+
 - `@Observable` + `@MainActor` ViewModels, strict concurrency
-- AVPlayer + AVPlayerLayer (UIViewRepresentable) for HLS
-- MTAudioProcessingTap + vDSP FFT for client-side bark/whine detection (same thresholds as web)
-- SSE via URLSession.bytes for real-time alerts
+- AVPlayer + AVPlayerLayer (UIViewRepresentable) for HLS playback
+- SSE via URLSession.bytes for real-time bark/whine alerts (detection runs server-side via `detector.js`)
+- Keychain storage for server URL and password
 - No third-party dependencies
 
 ### iOS Key Files
 - `ios/project.yml` — XcodeGen spec
 - `ios/OllieCam/OllieCamApp.swift` — App entry point
-- `ios/OllieCam/Services/` — APIClient, SSEClient, HLSPlayerService, AudioAnalysisService, FFTProcessor
+- `ios/OllieCam/Services/` — APIClient, SSEClient, HLSPlayerService
 - `ios/OllieCam/ViewModels/` — LiveStreamViewModel, ClipsViewModel, SettingsViewModel
 - `ios/OllieCam/Views/` — All SwiftUI views
+- `ios/OllieCam/Utilities/` — Constants, KeychainHelper, Color extension

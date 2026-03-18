@@ -1,6 +1,6 @@
 # iOS Client
 
-Native iOS app for monitoring OllieCam remotely with native HLS playback, client-side bark/whine detection, and real-time SSE alerts.
+Native iOS app for monitoring OllieCam remotely with native HLS playback, real-time SSE alerts, and event clips timeline.
 
 ## Setup
 
@@ -13,7 +13,7 @@ Native iOS app for monitoring OllieCam remotely with native HLS playback, client
 
 - **Swift 6.2 + SwiftUI**, targeting **iOS 26+**
 - Strict Swift concurrency with `@Observable` + `@MainActor` ViewModels
-- No third-party dependencies — AVPlayer for HLS, vDSP for FFT, URLSession for networking
+- No third-party dependencies — AVPlayer for HLS, URLSession for networking
 - SwiftLint enforced via build phase
 
 ## Project Structure
@@ -22,7 +22,7 @@ Native iOS app for monitoring OllieCam remotely with native HLS playback, client
 ios/OllieCam/
   OllieCamApp.swift          -- @main entry point
   Models/                    -- DetectionType, BarkEvent, ClipMetadata, ServerConfiguration
-  Services/                  -- APIClient, SSEClient, HLSPlayerService, AudioAnalysisService, FFTProcessor
+  Services/                  -- APIClient, SSEClient, HLSPlayerService
   ViewModels/                -- LiveStreamViewModel, ClipsViewModel, SettingsViewModel
   Views/                     -- All SwiftUI views
   Utilities/                 -- Constants, KeychainHelper, Color extension
@@ -36,19 +36,12 @@ ios/OllieCam/
 - Starts paused with `/snapshot` preview, tap play to stream, tap video to pause
 - Seek-to-live button for catching up
 
-### Bark/Whine Detection
-- **MTAudioProcessingTap** on AVPlayerItem audio mix taps decoded PCM samples
-- Lock-free ring buffer for real-time thread safety
-- **vDSP FFT** (2048 bins) — exact port of web client detection:
-  - Bark: 500–3000 Hz, spike >15 dB above baseline, >-45 dB absolute, 3s cooldown
-  - Whine: 300–5000 Hz, spike >8 dB sustained 15 frames (~1.5s), >-50 dB absolute, 5s cooldown
-  - Rolling baseline: 50-frame window (~5s)
-- Detection continues even when muted
-
-### SSE Real-Time Events
+### Real-Time Alerts (SSE)
 - URLSession.bytes async sequence, parses `data:` lines
-- Exponential backoff reconnection (1s → 2s → 4s, cap 30s)
+- Receives bark/whine events detected by the server-side detector (`detector.js`)
+- Exponential backoff reconnection (1s -> 2s -> 4s, cap 30s)
 - 2-second dedup window (matches web client)
+- Bark detection does NOT run on-device — all detection is handled server-side by the standalone detector process and delivered to the iOS app via SSE
 
 ### Event Clips
 - Horizontal scrollable timeline with thumbnail cards
@@ -57,7 +50,7 @@ ios/OllieCam/
 - Auto-refreshes when SSE reports new clips
 
 ### Settings
-- Server URL + optional password (stored in Keychain)
+- Server URL + optional password (stored in Keychain via `KeychainHelper`)
 - Connection test with status indicator
 - Shown on first launch if not configured
 
@@ -65,13 +58,23 @@ ios/OllieCam/
 
 | Endpoint | iOS Usage |
 |----------|-----------|
-| `GET /stream/stream.m3u8` | AVPlayer HLS source |
+| `GET /stream/master.m3u8` | AVPlayer HLS source (ABR master playlist) |
 | `GET /snapshot` | UIImage preview when paused |
-| `GET /events` | SSE stream for real-time alerts |
-| `POST /bark` | Report local detections |
+| `GET /events` | SSE stream for real-time bark/whine/viewer alerts |
 | `GET /api/clips` | Load clip metadata list |
 | `GET /clips/:file` | AsyncImage thumbnails, AVPlayer clip playback |
 
-## Configuration
+## Views
 
-All detection thresholds are defined in `Constants.swift` and match the web client exactly. See `docs/bark-detection.md` for the algorithm details.
+| View | Purpose |
+|------|---------|
+| `ContentView` | Root tab/navigation container |
+| `LiveStreamView` | Main live stream view with video, status, activity log |
+| `VideoPlayerView` | UIViewRepresentable wrapping AVPlayerLayer |
+| `StatusIndicatorView` | LIVE/Paused/Offline badge |
+| `AlertBannerView` | Bark/whine alert banner overlay |
+| `ActivityLogView` | Scrollable event log with type icons and timestamps |
+| `ClipsTimelineView` | Horizontal scroll of clip cards |
+| `ClipCardView` | Individual clip thumbnail card |
+| `ClipPlayerView` | Fullscreen clip playback sheet |
+| `SettingsView` | Server URL, password, connection test |
