@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct ContentView: View {
-    @Environment(SettingsViewModel.self) private var settingsVM
+    @Environment(ServerStore.self) private var serverStore
 
     var body: some View {
-        if settingsVM.isConfigured {
+        if serverStore.isConfigured {
             TabView {
                 Tab("Live", systemImage: "video.fill") {
                     NavigationStack {
@@ -18,13 +18,13 @@ struct ContentView: View {
                 }
                 Tab("Settings", systemImage: "gearshape") {
                     NavigationStack {
-                        SettingsView(isInitialSetup: false)
+                        ServerListView()
                     }
                 }
             }
         } else {
             NavigationStack {
-                SettingsView(isInitialSetup: true)
+                ServerFormView(mode: .initialSetup)
             }
         }
     }

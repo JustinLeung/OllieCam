@@ -4,6 +4,8 @@ import Observation
 @MainActor
 @Observable
 final class SettingsViewModel {
+    // Form fields
+    var name: String = ""
     var serverURL: String = ""
     var password: String = ""
     var connectionStatus: ConnectionStatus = .idle
@@ -15,8 +17,9 @@ final class SettingsViewModel {
     var notificationsEnabled: Bool = false
     var notificationTestStatus: NotificationTestStatus = .idle
 
-    private(set) var savedConfiguration: ServerConfiguration = .empty
     private let apiClient = APIClient()
+    private var pendingID = UUID()
+    private var editingServerID: UUID?
 
     enum ConnectionStatus: Equatable {
         case idle
@@ -32,56 +35,62 @@ final class SettingsViewModel {
         case failed(String)
     }
 
-    init() {
-        loadSavedConfiguration()
+    // MARK: - Form Setup
+
+    func prepareForAdd() {
+        pendingID = UUID()
+        editingServerID = nil
+        name = ""
+        serverURL = ""
+        password = ""
+        connectionStatus = .idle
+        errorMessage = nil
     }
+
+    func prepareForEdit(_ server: ServerConfiguration) {
+        editingServerID = server.id
+        name = server.name
+        serverURL = server.serverURL
+        password = server.password
+        connectionStatus = .idle
+        errorMessage = nil
+    }
+
+    var isEditing: Bool { editingServerID != nil }
 
     var currentConfiguration: ServerConfiguration {
-        ServerConfiguration(serverURL: serverURL, password: password)
+        ServerConfiguration(
+            id: editingServerID ?? pendingID,
+            name: name.isEmpty ? (URL(string: serverURL)?.host ?? serverURL) : name,
+            serverURL: serverURL,
+            password: password
+        )
     }
 
-    var isConfigured: Bool {
-        savedConfiguration.baseURL != nil
-    }
+    // MARK: - Connection Test
 
-    func loadSavedConfiguration() {
-        let url = KeychainHelper.load(forKey: Constants.Keychain.urlKey) ?? ""
-        let pass = KeychainHelper.load(forKey: Constants.Keychain.passwordKey) ?? ""
-        serverURL = url
-        password = pass
-        savedConfiguration = ServerConfiguration(serverURL: url, password: pass)
-
-        ntfyTopic = KeychainHelper.load(forKey: Constants.Keychain.ntfyTopicKey) ?? ""
-        ntfyServer = KeychainHelper.load(forKey: Constants.Keychain.ntfyServerKey)
-            ?? Constants.Notifications.defaultNtfyServer
-    }
-
-    func saveConfiguration() {
-        KeychainHelper.save(serverURL, forKey: Constants.Keychain.urlKey)
-        KeychainHelper.save(password, forKey: Constants.Keychain.passwordKey)
-        savedConfiguration = currentConfiguration
-    }
-
-    func testConnection() async {
+    func testConnection() async -> ServerConfiguration? {
+        let config = currentConfiguration
         connectionStatus = .testing
         errorMessage = nil
 
-        await apiClient.updateConfiguration(currentConfiguration)
+        await apiClient.updateConfiguration(config)
 
         do {
             _ = try await apiClient.testConnection()
             connectionStatus = .connected
-            saveConfiguration()
+            return config
         } catch {
             connectionStatus = .failed
             errorMessage = error.localizedDescription
+            return nil
         }
     }
 
     // MARK: - Notifications
 
-    func fetchNotificationConfig() async {
-        await apiClient.updateConfiguration(currentConfiguration)
+    func fetchNotificationConfig(for server: ServerConfiguration) async {
+        await apiClient.updateConfiguration(server)
         do {
             let config = try await apiClient.fetchNotificationConfig()
             notificationsEnabled = config.enabled
@@ -92,13 +101,13 @@ final class SettingsViewModel {
             KeychainHelper.save(ntfyTopic, forKey: Constants.Keychain.ntfyTopicKey)
             KeychainHelper.save(ntfyServer, forKey: Constants.Keychain.ntfyServerKey)
         } catch {
-            // Server may not support notifications yet — not an error
+            // Server may not support notifications yet
         }
     }
 
-    func sendTestNotification() async {
+    func sendTestNotification(for server: ServerConfiguration) async {
         notificationTestStatus = .sending
-        await apiClient.updateConfiguration(currentConfiguration)
+        await apiClient.updateConfiguration(server)
         do {
             try await apiClient.sendTestNotification()
             notificationTestStatus = .sent
@@ -109,11 +118,12 @@ final class SettingsViewModel {
 
     var ntfySubscribeURL: URL? {
         guard !ntfyTopic.isEmpty else { return nil }
-        // ntfy app registers for https://ntfy.sh/<topic> URLs
         return URL(string: "\(ntfyServer)/\(ntfyTopic)")
     }
 
-    var ntfyAppStoreURL: URL? {
-        URL(string: "https://apps.apple.com/app/ntfy/id1625396347")
+    func loadNotificationSettings() {
+        ntfyTopic = KeychainHelper.load(forKey: Constants.Keychain.ntfyTopicKey) ?? ""
+        ntfyServer = KeychainHelper.load(forKey: Constants.Keychain.ntfyServerKey)
+            ?? Constants.Notifications.defaultNtfyServer
     }
 }

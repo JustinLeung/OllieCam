@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LiveStreamView: View {
-    @Environment(SettingsViewModel.self) private var settingsVM
+    @Environment(ServerStore.self) private var serverStore
     @State private var viewModel = LiveStreamViewModel()
     @State private var isFullScreen = false
 
@@ -20,11 +20,16 @@ struct LiveStreamView: View {
             }
         }
         .task {
-            await viewModel.configure(with: settingsVM.savedConfiguration)
+            if let server = serverStore.activeServer {
+                await viewModel.configure(with: server)
+            }
         }
-        .onChange(of: settingsVM.savedConfiguration) {
+        .onChange(of: serverStore.activeServer) {
             Task {
-                await viewModel.configure(with: settingsVM.savedConfiguration)
+                if let server = serverStore.activeServer {
+                    await viewModel.stopStream()
+                    await viewModel.configure(with: server)
+                }
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isFullScreen)
@@ -58,7 +63,7 @@ struct LiveStreamView: View {
             }
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("OllieCam")
+        .navigationTitle(serverStore.activeServer?.name.isEmpty == false ? serverStore.activeServer!.name : "OllieCam")
         .navigationBarTitleDisplayMode(.inline)
     }
 

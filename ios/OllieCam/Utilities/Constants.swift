@@ -15,10 +15,19 @@ enum Constants {
 
     enum Keychain {
         static let service = "com.olliecam.server"
+        // Legacy keys (used for migration only)
         static let passwordKey = "serverPassword"
         static let urlKey = "serverURL"
+        // Multi-server password prefix
+        static let serverPasswordPrefix = "serverPassword-"
         static let ntfyTopicKey = "ntfyTopic"
         static let ntfyServerKey = "ntfyServer"
+    }
+
+    enum Storage {
+        static let savedServersKey = "savedServers"
+        static let activeServerIDKey = "activeServerID"
+        static let didMigrateLegacyServerKey = "didMigrateLegacyServer"
     }
 
     enum Notifications {

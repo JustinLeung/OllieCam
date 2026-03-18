@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ClipsGridView: View {
-    @Environment(SettingsViewModel.self) private var settingsVM
+    @Environment(ServerStore.self) private var serverStore
     @State private var viewModel = ClipsViewModel()
     @State private var selectedClip: ClipMetadata?
     @State private var filterType: DetectionType?
@@ -57,12 +57,16 @@ struct ClipsGridView: View {
             await viewModel.loadClips()
         }
         .task {
-            viewModel.configure(with: settingsVM.savedConfiguration)
-            await viewModel.loadClips()
+            if let server = serverStore.activeServer {
+                viewModel.configure(with: server)
+                await viewModel.loadClips()
+            }
         }
-        .onChange(of: settingsVM.savedConfiguration) {
-            viewModel.configure(with: settingsVM.savedConfiguration)
-            Task { await viewModel.loadClips() }
+        .onChange(of: serverStore.activeServer) {
+            if let server = serverStore.activeServer {
+                viewModel.configure(with: server)
+                Task { await viewModel.loadClips() }
+            }
         }
         .sheet(item: $selectedClip) { clip in
             ClipPlayerView(clip: clip, clipsViewModel: viewModel)

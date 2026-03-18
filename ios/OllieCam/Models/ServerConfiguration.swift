@@ -1,6 +1,8 @@
 import Foundation
 
-struct ServerConfiguration: Codable, Sendable, Equatable {
+struct ServerConfiguration: Sendable, Equatable, Hashable, Identifiable {
+    let id: UUID
+    var name: String
     var serverURL: String
     var password: String
 
@@ -26,5 +28,12 @@ struct ServerConfiguration: Codable, Sendable, Equatable {
         return "Basic \(data.base64EncodedString())"
     }
 
-    static let empty = ServerConfiguration(serverURL: "", password: "")
+    init(id: UUID = UUID(), name: String = "", serverURL: String = "", password: String = "") {
+        self.id = id
+        self.name = name
+        self.serverURL = serverURL
+        self.password = password
+    }
+
+    static let empty = ServerConfiguration()
 }

@@ -69,13 +69,14 @@ Native iOS app in `ios/`. Uses XcodeGen (`project.yml`) — run `xcodegen genera
 - Material backgrounds (`.ultraThinMaterial`, `.regularMaterial`) for overlays
 - AVPlayer + AVPlayerLayer (UIViewRepresentable) for HLS playback
 - SSE via URLSession.bytes for real-time bark/whine alerts (detection runs server-side via `detector.js`)
-- Keychain storage for server URL and password
+- Multi-server support: add/edit/delete/switch between multiple OllieCam servers, persisted via UserDefaults (metadata) + Keychain (passwords)
+- Push notification auto-discovery from server, ntfy subscribe deep-link
 - No third-party dependencies
 
 ### iOS Key Files
 - `ios/project.yml` — XcodeGen spec
-- `ios/OllieCam/OllieCamApp.swift` — App entry point
-- `ios/OllieCam/Services/` — APIClient, SSEClient, HLSPlayerService
-- `ios/OllieCam/ViewModels/` — LiveStreamViewModel, ClipsViewModel, SettingsViewModel
-- `ios/OllieCam/Views/` — All SwiftUI views (ContentView with TabView, LiveStreamView, ClipsGridView, SettingsView, etc.)
+- `ios/OllieCam/OllieCamApp.swift` — App entry point, injects ServerStore + SettingsViewModel
+- `ios/OllieCam/Services/` — APIClient, SSEClient, HLSPlayerService, ServerStore (server list persistence)
+- `ios/OllieCam/ViewModels/` — LiveStreamViewModel, ClipsViewModel, SettingsViewModel (server form + notification settings)
+- `ios/OllieCam/Views/` — ContentView (TabView), LiveStreamView, ClipsGridView, ServerListView (settings tab), ServerFormView (add/edit server)
 - `ios/OllieCam/Utilities/` — Constants, KeychainHelper
