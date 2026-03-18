@@ -38,6 +38,8 @@ const NTFY_TOPIC = loadNtfyTopic();
 
 // Night vision mode (boosted brightness/contrast/gamma for low light)
 let nightVision = false;
+const NIGHT_VISION_FILTER = "eq=brightness=0.1:contrast=1.5:gamma=2.0";
+const NIGHT_VISION_COOLDOWN_MS = 5000;
 
 // Adaptive bitrate streaming (set ABR=false to use single 720p stream)
 const ABR = (process.env.ABR || "true").toLowerCase() !== "false";
@@ -382,13 +384,20 @@ app.post("/api/notifications/test", async (req, res) => {
 });
 
 // --- Night Vision API ---
+let lastNightVisionToggle = 0;
+
 app.get("/api/nightvision", (req, res) => {
   res.json({ enabled: nightVision });
 });
 
 app.post("/api/nightvision", (req, res) => {
+  const now = Date.now();
+  if (now - lastNightVisionToggle < NIGHT_VISION_COOLDOWN_MS) {
+    return res.status(429).json({ error: "Please wait before toggling again", enabled: nightVision });
+  }
   const enabled = req.body.enabled !== undefined ? !!req.body.enabled : !nightVision;
   if (enabled === nightVision) return res.json({ enabled: nightVision });
+  lastNightVisionToggle = now;
   nightVision = enabled;
   console.log(`[NIGHT VISION] ${nightVision ? "ON" : "OFF"} — restarting ffmpeg`);
   broadcast({ type: "nightvision", enabled: nightVision });
@@ -398,17 +407,17 @@ app.post("/api/nightvision", (req, res) => {
 
 // Start ffmpeg capture
 function startFFmpeg() {
-  // Clean old segments
+  // Clean old segments (preserve any in-progress clip captures)
   if (ABR) {
     for (const v of VARIANTS) {
       const dir = path.join(HLS_DIR, v.name);
       for (const f of fs.readdirSync(dir)) {
-        fs.unlinkSync(path.join(dir, f));
+        if (!activeCaptures.has(f)) fs.unlinkSync(path.join(dir, f));
       }
     }
   } else {
     for (const f of fs.readdirSync(HLS_DIR)) {
-      if (f === "master.m3u8") continue;
+      if (f === "master.m3u8" || activeCaptures.has(f)) continue;
       fs.unlinkSync(path.join(HLS_DIR, f));
     }
   }
@@ -431,7 +440,7 @@ function startFFmpeg() {
     const splits = VARIANTS.map((_, i) => `[v${i}]`).join("");
     let fc;
     if (nightVision) {
-      fc = `[0:v]eq=brightness=0.1:contrast=1.5:gamma=2.0[veq];[veq]split=${numV}${splits}`;
+      fc = `[0:v]${NIGHT_VISION_FILTER}[veq];[veq]split=${numV}${splits}`;
     } else {
       fc = `[0:v]split=${numV}${splits}`;
     }
@@ -481,7 +490,7 @@ function startFFmpeg() {
       "-framerate", "30",
       "-video_size", "1280x720",
       "-i", `${CAMERA}:${audioInput}`,
-      ...(nightVision ? ["-vf", "eq=brightness=0.1:contrast=1.5:gamma=2.0"] : []),
+      ...(nightVision ? ["-vf", NIGHT_VISION_FILTER] : []),
       "-c:v", "libx264",
       "-preset", "ultrafast",
       "-tune", "zerolatency",
@@ -512,7 +521,7 @@ function startFFmpeg() {
 
   ffmpeg.on("close", (code) => {
     console.error(`ffmpeg exited with code ${code}, restarting in 3s...`);
-    setTimeout(startFFmpeg, 3000);
+    setTimeout(() => { ffmpegProcess = startFFmpeg(); }, 3000);
   });
 
   return ffmpeg;
@@ -522,8 +531,10 @@ let ffmpegProcess = startFFmpeg();
 
 function restartFFmpeg() {
   ffmpegProcess.removeAllListeners("close");
+  ffmpegProcess.on("close", () => {
+    ffmpegProcess = startFFmpeg();
+  });
   ffmpegProcess.kill("SIGTERM");
-  ffmpegProcess = startFFmpeg();
 }
 
 // Server-side segment cleanup
