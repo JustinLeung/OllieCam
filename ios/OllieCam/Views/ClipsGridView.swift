@@ -5,6 +5,7 @@ struct ClipsGridView: View {
     @State private var viewModel = ClipsViewModel()
     @State private var selectedClip: ClipMetadata?
     @State private var filterType: DetectionType?
+    @State private var clipToDelete: ClipMetadata?
 
     private var filteredClips: [ClipMetadata] {
         if let filterType {
@@ -40,6 +41,11 @@ struct ClipsGridView: View {
                                     ClipCardView(clip: clip, viewModel: viewModel)
                                 }
                                 .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Delete Clip", systemImage: "trash", role: .destructive) {
+                                    clipToDelete = clip
+                                }
+                            }
                             }
                         }
                         .padding(.horizontal)
@@ -70,6 +76,18 @@ struct ClipsGridView: View {
         }
         .sheet(item: $selectedClip) { clip in
             ClipPlayerView(clip: clip, clipsViewModel: viewModel)
+        }
+        .confirmationDialog("Delete this clip?", isPresented: Binding(
+            get: { clipToDelete != nil },
+            set: { if !$0 { clipToDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button("Delete Clip", role: .destructive) {
+                if let clip = clipToDelete {
+                    Task { await viewModel.deleteClip(clip) }
+                }
+            }
+        } message: {
+            Text("This clip will be permanently removed from the server.")
         }
     }
 

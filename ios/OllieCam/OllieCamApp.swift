@@ -1,7 +1,17 @@
 import SwiftUI
 
+@MainActor
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    let orientationManager = OrientationManager()
+
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        orientationManager.supportedOrientations
+    }
+}
+
 @main
 struct OllieCamApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var serverStore = ServerStore()
     @State private var settingsViewModel = SettingsViewModel()
     @State private var appState: AppState = .splash
@@ -33,6 +43,7 @@ struct OllieCamApp: App {
                     ContentView()
                         .environment(serverStore)
                         .environment(settingsViewModel)
+                        .environment(appDelegate.orientationManager)
                         .transition(.opacity)
                 }
             }

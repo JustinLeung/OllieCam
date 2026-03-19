@@ -71,12 +71,13 @@ Native iOS app in `ios/`. Uses XcodeGen (`project.yml`) — run `xcodegen genera
 - SSE via URLSession.bytes for real-time bark/whine alerts (detection runs server-side via `detector.js`)
 - Multi-server support: add/edit/delete/switch between multiple OllieCam servers, persisted via UserDefaults (metadata) + Keychain (passwords)
 - Push notification auto-discovery from server, ntfy subscribe deep-link
+- Landscape fullscreen: `OrientationManager` + `AppDelegate` dynamically lock/unlock rotation; auto-enters fullscreen on landscape rotation, auto-exits on portrait; controls auto-hide after 3s
 - No third-party dependencies
 
 ### iOS Key Files
 - `ios/project.yml` — XcodeGen spec
-- `ios/OllieCam/OllieCamApp.swift` — App entry point, injects ServerStore + SettingsViewModel
+- `ios/OllieCam/OllieCamApp.swift` — App entry point + AppDelegate (orientation control), injects ServerStore + SettingsViewModel + OrientationManager
 - `ios/OllieCam/Services/` — APIClient, SSEClient, HLSPlayerService, ServerStore (server list persistence)
 - `ios/OllieCam/ViewModels/` — LiveStreamViewModel, ClipsViewModel, SettingsViewModel (server form + notification settings)
 - `ios/OllieCam/Views/` — ContentView (TabView), LiveStreamView, ClipsGridView, ServerListView (settings tab), ServerFormView (add/edit server)
-- `ios/OllieCam/Utilities/` — Constants, KeychainHelper
+- `ios/OllieCam/Utilities/` — Constants, KeychainHelper, OrientationManager

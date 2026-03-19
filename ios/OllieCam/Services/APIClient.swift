@@ -109,6 +109,19 @@ actor APIClient {
         return try decoder.decode([ClipMetadata].self, from: data)
     }
 
+    func deleteClip(id: String) async throws {
+        guard let url = url(for: "api/clips/\(id)") else {
+            throw APIError.invalidURL
+        }
+        var request = authorizedRequest(for: url)
+        request.httpMethod = "DELETE"
+        let (_, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.invalidResponse
+        }
+    }
+
     func clipURL(for filename: String) -> URL? {
         url(for: "clips/\(filename)")
     }

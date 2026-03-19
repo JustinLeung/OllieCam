@@ -6,6 +6,7 @@ struct ClipPlayerView: View {
     let clipsViewModel: ClipsViewModel
 
     @State private var player: AVPlayer?
+    @State private var showDeleteConfirmation = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -24,11 +25,29 @@ struct ClipPlayerView: View {
             .navigationTitle(clip.type.label)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
                 }
+            }
+            .confirmationDialog("Delete this clip?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                Button("Delete Clip", role: .destructive) {
+                    Task {
+                        await clipsViewModel.deleteClip(clip)
+                        dismiss()
+                    }
+                }
+            } message: {
+                Text("This clip will be permanently removed from the server.")
             }
             .toolbarBackground(.hidden, for: .navigationBar)
         }

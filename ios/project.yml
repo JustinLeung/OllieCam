@@ -23,6 +23,7 @@ targets:
         INFOPLIST_KEY_UILaunchStoryboardName: ""
         INFOPLIST_KEY_NSCameraUsageDescription: "OllieCam needs camera access for local testing"
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "OllieCam needs microphone access for local testing"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
     postBuildScripts:
       - script: |
           if [ -x "$(command -v swiftlint)" ]; then

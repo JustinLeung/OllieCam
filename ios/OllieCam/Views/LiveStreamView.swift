@@ -2,8 +2,11 @@ import SwiftUI
 
 struct LiveStreamView: View {
     @Environment(ServerStore.self) private var serverStore
+    @Environment(OrientationManager.self) private var orientationManager
     @State private var viewModel = LiveStreamViewModel()
     @State private var isFullScreen = false
+    @State private var controlsVisible = true
+    @State private var hideControlsTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -32,8 +35,82 @@ struct LiveStreamView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            handleDeviceRotation()
+        }
+        .onDisappear {
+            if isFullScreen {
+                exitFullScreen()
+            }
+        }
         .animation(.easeInOut(duration: 0.3), value: isFullScreen)
         .statusBarHidden(isFullScreen)
+        .toolbar(isFullScreen ? .hidden : .automatic, for: .tabBar)
+        .toolbar(isFullScreen ? .hidden : .automatic, for: .navigationBar)
+    }
+
+    // MARK: - Orientation
+
+    private func handleDeviceRotation() {
+        let orientation = UIDevice.current.orientation
+        guard orientation == .portrait || orientation.isLandscape else { return }
+
+        if orientation.isLandscape && !isFullScreen && viewModel.isStreamActive {
+            enterFullScreen(requestLandscape: false)
+        } else if orientation == .portrait && isFullScreen {
+            exitFullScreen()
+        }
+    }
+
+    private func enterFullScreen(requestLandscape: Bool) {
+        orientationManager.setLandscapeAllowed(true)
+        withAnimation(.easeInOut(duration: 0.3)) {
+            isFullScreen = true
+            controlsVisible = true
+        }
+        if requestLandscape {
+            orientationManager.requestLandscape()
+        }
+        scheduleHideControls()
+    }
+
+    private func exitFullScreen() {
+        hideControlsTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.3)) {
+            isFullScreen = false
+        }
+        orientationManager.requestPortrait()
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            orientationManager.setLandscapeAllowed(false)
+        }
+    }
+
+    // MARK: - Controls Visibility
+
+    private func toggleControls() {
+        if controlsVisible {
+            hideControlsTask?.cancel()
+            withAnimation(.easeOut(duration: 0.2)) {
+                controlsVisible = false
+            }
+        } else {
+            withAnimation(.easeIn(duration: 0.2)) {
+                controlsVisible = true
+            }
+            scheduleHideControls()
+        }
+    }
+
+    private func scheduleHideControls() {
+        hideControlsTask?.cancel()
+        hideControlsTask = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.3)) {
+                controlsVisible = false
+            }
+        }
     }
 
     // MARK: - Normal Layout
@@ -76,13 +153,20 @@ struct LiveStreamView: View {
             if viewModel.isStreamActive, let player = viewModel.playerService.player {
                 VideoPlayerView(player: player)
                     .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation { isFullScreen = false }
-                    }
             }
 
-            fullScreenControlBar
+            Color.clear
+                .contentShape(Rectangle())
+                .ignoresSafeArea()
+                .onTapGesture { toggleControls() }
+
+            if controlsVisible {
+                fullScreenControlBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: controlsVisible)
+        .persistentSystemOverlays(.hidden)
     }
 
     private var fullScreenControlBar: some View {
@@ -96,7 +180,7 @@ struct LiveStreamView: View {
 
             Button {
                 Task { await viewModel.stopStream() }
-                withAnimation { isFullScreen = false }
+                exitFullScreen()
             } label: {
                 Image(systemName: "pause.fill")
                     .font(.title2)
@@ -105,6 +189,7 @@ struct LiveStreamView: View {
 
             Button {
                 viewModel.toggleMute()
+                scheduleHideControls()
             } label: {
                 Image(systemName: viewModel.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.title2)
@@ -113,6 +198,7 @@ struct LiveStreamView: View {
 
             Button {
                 viewModel.playerService.seekToLive()
+                scheduleHideControls()
             } label: {
                 Text("LIVE")
                     .font(.caption)
@@ -127,7 +213,7 @@ struct LiveStreamView: View {
             Spacer()
 
             Button {
-                withAnimation { isFullScreen = false }
+                exitFullScreen()
             } label: {
                 Image(systemName: "arrow.down.right.and.arrow.up.left")
                     .font(.title2)
@@ -135,7 +221,14 @@ struct LiveStreamView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
+        .background(
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.6)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
     }
 
     // MARK: - Video Area
@@ -145,7 +238,7 @@ struct LiveStreamView: View {
             if viewModel.isStreamActive, let player = viewModel.playerService.player {
                 VideoPlayerView(player: player)
                     .onTapGesture {
-                        withAnimation { isFullScreen = true }
+                        enterFullScreen(requestLandscape: false)
                     }
             } else if let snapshot = viewModel.snapshotImage {
                 Image(uiImage: snapshot)
@@ -222,7 +315,7 @@ struct LiveStreamView: View {
                 }
 
                 Button {
-                    withAnimation { isFullScreen = true }
+                    enterFullScreen(requestLandscape: true)
                 } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.title3)

@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 import Observation
 
 @MainActor
@@ -28,6 +28,20 @@ final class ClipsViewModel {
         }
 
         isLoading = false
+    }
+
+    func deleteClip(_ clip: ClipMetadata) async -> Bool {
+        guard let client = apiClient else { return false }
+        do {
+            try await client.deleteClip(id: clip.id)
+            withAnimation {
+                clips.removeAll { $0.id == clip.id }
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     func clipURL(for clip: ClipMetadata) async -> URL? {
